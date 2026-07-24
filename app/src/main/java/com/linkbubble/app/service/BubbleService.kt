@@ -57,13 +57,23 @@ class BubbleService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        db = AppDatabase.getInstance(this)
-        startForegroundNotification()
+        try {
+            db = AppDatabase.getInstance(this)
+            startForegroundNotification()
 
-        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        setupBubble()
-        setupPanel()
-        observeCategories()
+            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            setupBubble()
+            setupPanel()
+            observeCategories()
+        } catch (e: Throwable) {
+            android.util.Log.e("BubbleService", "Fallo al iniciar la burbuja", e)
+            Toast.makeText(
+                this,
+                "Error al iniciar la burbuja: ${e.javaClass.simpleName}: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+            stopSelf()
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -93,7 +103,8 @@ class BubbleService : Service() {
             .setOngoing(true)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            // FOREGROUND_SERVICE_TYPE_SPECIAL_USE solo existe desde Android 14 (API 34).
             startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(1, notification)
@@ -208,16 +219,21 @@ class BubbleService : Service() {
 
     private fun showPanel() {
         if (!panelAdded) {
-            panelParams.x = bubbleParams.x
-            panelParams.y = bubbleParams.y + 70
-            windowManager.addView(panelView, panelParams)
-            panelAdded = true
+            try {
+                panelParams.x = bubbleParams.x
+                panelParams.y = bubbleParams.y + 70
+                windowManager.addView(panelView, panelParams)
+                panelAdded = true
+            } catch (e: Throwable) {
+                android.util.Log.e("BubbleService", "Fallo al mostrar el panel", e)
+                Toast.makeText(this, "Error al abrir el panel: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
     private fun hidePanel() {
         if (panelAdded) {
-            windowManager.removeView(panelView)
+            runCatching { windowManager.removeView(panelView) }
             panelAdded = false
         }
     }
