@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center_vertical">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="LinkBubble"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Guarda tus links por categoría desde un icono flotante que te acompaña en cualquier app."
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:id="@+id/tvOverlayStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/btnGrantOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Conceder permiso de superposición"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnStartBubble"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Iniciar burbuja"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnStopBubble"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Detener burbuja"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:text="Alternativa con Shizuku/aShell (sin tocar Ajustes):\nadb shell appops set com.linkbubble.app SYSTEM_ALERT_WINDOW allow" />
+
+</LinearLayout>
