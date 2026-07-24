@@ -3,13 +3,14 @@
     android:layout_width="56dp"
     android:layout_height="56dp">
 
-    <ImageView
+    <TextView
         android:id="@+id/ivBubbleIcon"
         android:layout_width="56dp"
         android:layout_height="56dp"
         android:background="@drawable/bubble_background"
-        android:padding="12dp"
-        android:src="@drawable/ic_launcher_foreground"
+        android:gravity="center"
+        android:text="&#128279;"
+        android:textSize="22sp"
         android:contentDescription="LinkBubble" />
 
 </FrameLayout>
