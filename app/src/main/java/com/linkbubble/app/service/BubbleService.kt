@@ -52,11 +52,14 @@ class BubbleService : Service() {
     private lateinit var bubbleView: View
     private lateinit var panelView: View
     private lateinit var formView: View
+    private lateinit var closeTargetView: View
     private lateinit var bubbleParams: WindowManager.LayoutParams
     private lateinit var panelParams: WindowManager.LayoutParams
     private lateinit var formParams: WindowManager.LayoutParams
+    private lateinit var closeTargetParams: WindowManager.LayoutParams
     private var panelAdded = false
     private var formAdded = false
+    private var closeTargetAdded = false
 
     private lateinit var db: AppDatabase
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
@@ -91,6 +94,7 @@ class BubbleService : Service() {
             setupBubble()
             setupPanel()
             setupForm()
+            setupCloseTarget()
             observeCategories()
         } catch (e: Throwable) {
             android.util.Log.e("BubbleService", "Fallo al iniciar la burbuja", e)
@@ -195,21 +199,100 @@ class BubbleService : Service() {
                 MotionEvent.ACTION_MOVE -> {
                     val dx = (event.rawX - initialTouchX).toInt()
                     val dy = (event.rawY - initialTouchY).toInt()
-                    if (abs(dx) > 12 || abs(dy) > 12) isDragging = true
+                    if (abs(dx) > 12 || abs(dy) > 12) {
+                        if (!isDragging) {
+                            isDragging = true
+                            hidePanel()
+                            showCloseTarget()
+                        }
+                    }
                     bubbleParams.x = initialX + dx
                     bubbleParams.y = initialY + dy
                     windowManager.updateViewLayout(bubbleView, bubbleParams)
+
+                    if (isDragging) {
+                        updateCloseTargetHover()
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     val elapsed = System.currentTimeMillis() - downTime
                     if (!isDragging && elapsed < 300) {
                         togglePanel()
+                    } else if (isDragging && isNearCloseTarget()) {
+                        stopSelf()
                     }
+                    hideCloseTarget()
                     true
                 }
                 else -> false
             }
+        }
+    }
+
+    // ---------- Objetivo "soltar para cerrar" ----------
+
+    private fun setupCloseTarget() {
+        closeTargetView = themedInflater.inflate(R.layout.layout_close_target, null)
+
+        val metrics = resources.displayMetrics
+        val targetSize = (64 * metrics.density).toInt()
+        val marginBottom = (120 * metrics.density).toInt()
+
+        closeTargetParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            y = marginBottom - targetSize
+        }
+    }
+
+    private fun closeTargetCenter(): Pair<Int, Int> {
+        val metrics = resources.displayMetrics
+        val targetSize = (64 * metrics.density).toInt()
+        val marginBottom = (120 * metrics.density).toInt()
+        val cx = metrics.widthPixels / 2
+        val cy = metrics.heightPixels - marginBottom - (targetSize / 2)
+        return Pair(cx, cy)
+    }
+
+    private fun bubbleCenter(): Pair<Int, Int> {
+        val bubbleSize = (56 * resources.displayMetrics.density).toInt()
+        return Pair(bubbleParams.x + bubbleSize / 2, bubbleParams.y + bubbleSize / 2)
+    }
+
+    private fun isNearCloseTarget(): Boolean {
+        val (bx, by) = bubbleCenter()
+        val (cx, cy) = closeTargetCenter()
+        val dist = kotlin.math.hypot((bx - cx).toDouble(), (by - cy).toDouble())
+        return dist < (90 * resources.displayMetrics.density)
+    }
+
+    private fun updateCloseTargetHover() {
+        val hovering = isNearCloseTarget()
+        val label = closeTargetView.findViewById<TextView>(R.id.tvCloseTarget)
+        val scale = if (hovering) 1.3f else 1.0f
+        label.scaleX = scale
+        label.scaleY = scale
+    }
+
+    private fun showCloseTarget() {
+        if (!closeTargetAdded) {
+            runCatching {
+                windowManager.addView(closeTargetView, closeTargetParams)
+                closeTargetAdded = true
+            }
+        }
+    }
+
+    private fun hideCloseTarget() {
+        if (closeTargetAdded) {
+            runCatching { windowManager.removeView(closeTargetView) }
+            closeTargetAdded = false
         }
     }
 
@@ -259,9 +342,8 @@ class BubbleService : Service() {
             0, // focusable: necesita foco para que el teclado escriba en los EditText
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 380
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            y = (60 * resources.displayMetrics.density).toInt()
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
 
@@ -335,8 +417,6 @@ class BubbleService : Service() {
     private fun showForm() {
         if (!formAdded) {
             try {
-                formParams.x = bubbleParams.x
-                formParams.y = bubbleParams.y + 70
                 windowManager.addView(formView, formParams)
                 formAdded = true
             } catch (e: Throwable) {
@@ -514,6 +594,9 @@ class BubbleService : Service() {
         }
         if (formAdded) {
             runCatching { windowManager.removeView(formView) }
+        }
+        if (closeTargetAdded) {
+            runCatching { windowManager.removeView(closeTargetView) }
         }
     }
 }
