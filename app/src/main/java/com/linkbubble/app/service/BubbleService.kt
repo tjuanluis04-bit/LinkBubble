@@ -102,7 +102,7 @@ class BubbleService : Service() {
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("LinkBubble activo")
             .setContentText("Toca para abrir la app")
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(openAppIntent)
             .setOngoing(true)
             .build()

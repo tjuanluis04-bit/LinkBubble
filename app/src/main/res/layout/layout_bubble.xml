@@ -9,7 +9,7 @@
         android:layout_height="56dp"
         android:background="@drawable/bubble_background"
         android:padding="12dp"
-        android:src="@drawable/ic_launcher"
+        android:src="@drawable/ic_launcher_foreground"
         android:contentDescription="LinkBubble" />
 
 </FrameLayout>
