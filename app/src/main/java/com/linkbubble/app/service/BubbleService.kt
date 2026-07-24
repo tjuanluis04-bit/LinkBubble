@@ -48,6 +48,7 @@ class BubbleService : Service() {
 
     private lateinit var db: AppDatabase
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private lateinit var themedInflater: LayoutInflater
 
     private lateinit var adapter: PanelAdapter
     private var currentCategories: List<CategoryWithCount> = emptyList()
@@ -62,6 +63,9 @@ class BubbleService : Service() {
             startForegroundNotification()
 
             windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            themedInflater = LayoutInflater.from(
+                android.view.ContextThemeWrapper(this, R.style.Theme_LinkBubble)
+            )
             setupBubble()
             setupPanel()
             observeCategories()
@@ -114,7 +118,7 @@ class BubbleService : Service() {
     // ---------- Burbuja flotante ----------
 
     private fun setupBubble() {
-        bubbleView = LayoutInflater.from(this).inflate(R.layout.layout_bubble, null)
+        bubbleView = themedInflater.inflate(R.layout.layout_bubble, null)
 
         val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -175,7 +179,7 @@ class BubbleService : Service() {
     }
 
     private fun setupPanel() {
-        panelView = LayoutInflater.from(this).inflate(R.layout.layout_bubble_panel, null)
+        panelView = themedInflater.inflate(R.layout.layout_bubble_panel, null)
 
         val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
