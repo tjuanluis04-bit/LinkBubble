@@ -71,12 +71,25 @@ class BubbleService : Service() {
             observeCategories()
         } catch (e: Throwable) {
             android.util.Log.e("BubbleService", "Fallo al iniciar la burbuja", e)
+            writeCrashToFile(e)
             Toast.makeText(
                 this,
-                "Error al iniciar la burbuja: ${e.javaClass.simpleName}: ${e.message}",
+                "Error guardado en Android/data/com.linkbubble.app/files/crash.txt",
                 Toast.LENGTH_LONG
             ).show()
             stopSelf()
+        }
+    }
+
+    private fun writeCrashToFile(e: Throwable) {
+        try {
+            val dir = getExternalFilesDir(null) ?: filesDir
+            val file = java.io.File(dir, "crash.txt")
+            val sw = java.io.StringWriter()
+            e.printStackTrace(java.io.PrintWriter(sw))
+            file.writeText(sw.toString())
+        } catch (inner: Throwable) {
+            android.util.Log.e("BubbleService", "No se pudo escribir el crash a archivo", inner)
         }
     }
 
@@ -230,7 +243,8 @@ class BubbleService : Service() {
                 panelAdded = true
             } catch (e: Throwable) {
                 android.util.Log.e("BubbleService", "Fallo al mostrar el panel", e)
-                Toast.makeText(this, "Error al abrir el panel: ${e.message}", Toast.LENGTH_LONG).show()
+                writeCrashToFile(e)
+                Toast.makeText(this, "Error guardado en crash.txt", Toast.LENGTH_LONG).show()
             }
         }
     }
