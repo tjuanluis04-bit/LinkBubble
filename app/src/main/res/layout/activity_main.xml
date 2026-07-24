@@ -52,6 +52,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="12sp"
-        android:text="Alternativa con Shizuku/aShell (sin tocar Ajustes):\nadb shell appops set com.linkbubble.app SYSTEM_ALERT_WINDOW allow" />
+        android:text="Alternativa con Shizuku/aShell (sin tocar Ajustes). Ojo: dentro de aShell ya estás en una shell del propio celular, así que NO se le pone el prefijo 'adb shell', solo:\nappops set com.linkbubble.app SYSTEM_ALERT_WINDOW allow" />
 
 </LinearLayout>

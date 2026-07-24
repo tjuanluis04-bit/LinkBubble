@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 interface CategoryDao {
     @Query(
         """
-        SELECT categories.id as id, categories.name as name, COUNT(links.id) as linkCount
+        SELECT categories.id as id, categories.name as name, categories.color as color, COUNT(links.id) as linkCount
         FROM categories LEFT JOIN links ON links.categoryId = categories.id
         GROUP BY categories.id
         ORDER BY categories.createdAt ASC

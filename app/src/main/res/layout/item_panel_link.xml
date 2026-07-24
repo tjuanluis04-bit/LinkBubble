@@ -26,13 +26,15 @@
         android:clickable="true"
         android:focusable="true"
         android:padding="4dp"
-        android:text="https://ejemplo.com" />
+        android:text="https://ejemplo.com"
+        android:textColor="#212121" />
 
     <TextView
         android:id="@+id/btnLinkMenu"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="⋮"
+        android:textColor="#212121"
         android:textSize="16sp"
         android:padding="6dp"
         android:clickable="true"

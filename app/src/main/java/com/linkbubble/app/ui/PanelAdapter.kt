@@ -70,6 +70,7 @@ class PanelAdapter(
     }
 
     inner class HeaderVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val viewColorDot: View = itemView.findViewById(R.id.viewColorDot)
         private val tvChevron: TextView = itemView.findViewById(R.id.tvHeaderChevron)
         private val tvName: TextView = itemView.findViewById(R.id.tvHeaderName)
         private val btnAdd: TextView = itemView.findViewById(R.id.btnAddLink)
@@ -79,6 +80,11 @@ class PanelAdapter(
             val cat = header.category
             tvName.text = "${cat.name} (${cat.linkCount})"
             tvChevron.text = if (header.expanded) "▾" else "▸"
+            try {
+                viewColorDot.background.setTint(android.graphics.Color.parseColor(cat.color))
+            } catch (_: Exception) {
+                viewColorDot.background.setTint(android.graphics.Color.parseColor("#6200EE"))
+            }
             itemView.setOnClickListener { onToggleExpand(cat.id) }
             btnAdd.setOnClickListener { onAddLinkClicked(cat.id) }
             btnMenu.setOnClickListener { onCategoryMenuClicked(cat.id, it) }

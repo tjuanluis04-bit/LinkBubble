@@ -52,10 +52,11 @@ LinkBubble/
 ## Primer uso en el celular
 
 1. Abre la app → botón **"Conceder permiso de superposición"** → actívalo para LinkBubble.
-   - Alternativa con Shizuku/aShell, sin tocar Ajustes:
+   - Alternativa con Shizuku/aShell, sin tocar Ajustes. Importante: dentro de aShell ya estás parado en una shell del propio celular (no es tu PC), así que **no** le pongas el prefijo `adb shell`, solo:
      ```
-     adb shell appops set com.linkbubble.app SYSTEM_ALERT_WINDOW allow
+     appops set com.linkbubble.app SYSTEM_ALERT_WINDOW allow
      ```
+     (el prefijo `adb shell` solo se usa si corrés el comando desde una PC conectada por cable con adb)
 2. Botón **"Iniciar burbuja"** → aparece el icono flotante (arrástralo donde quieras).
 3. Toca el icono para abrir/cerrar el panel. Crea tu primera categoría con "+ Nueva categoría" y luego añade links con el "+" de esa categoría.
 

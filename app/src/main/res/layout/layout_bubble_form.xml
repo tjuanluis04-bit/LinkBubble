@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="300dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/panel_background"
+    android:elevation="10dp"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tvFormTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Nueva categoría"
+        android:textColor="#212121"
+        android:textStyle="bold"
+        android:textSize="16sp"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Sección categoría -->
+    <LinearLayout
+        android:id="@+id/llCategoryForm"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <EditText
+            android:id="@+id/etCategoryName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Nombre de la categoría"
+            android:textColor="#212121"
+            android:textColorHint="#888888"
+            android:maxLines="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Color"
+            android:textColor="#888888"
+            android:textSize="12sp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="6dp" />
+
+        <LinearLayout
+            android:id="@+id/llColorSwatches"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center" />
+    </LinearLayout>
+
+    <!-- Sección link -->
+    <LinearLayout
+        android:id="@+id/llLinkForm"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/etUrl"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="URL"
+            android:textColor="#212121"
+            android:textColorHint="#888888"
+            android:inputType="textUri"
+            android:maxLines="1" />
+
+        <EditText
+            android:id="@+id/etTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Título (opcional)"
+            android:textColor="#212121"
+            android:textColorHint="#888888"
+            android:maxLines="1"
+            android:layout_marginTop="8dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:layout_marginTop="16dp">
+
+        <TextView
+            android:id="@+id/btnFormCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cancelar"
+            android:textColor="#888888"
+            android:padding="10dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/btnFormSave"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Guardar"
+            android:textColor="#6200EE"
+            android:textStyle="bold"
+            android:padding="10dp"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+</LinearLayout>

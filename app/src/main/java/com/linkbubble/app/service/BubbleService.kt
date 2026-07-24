@@ -10,7 +10,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
@@ -18,16 +20,18 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.PopupMenu
+import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.linkbubble.app.MainActivity
 import com.linkbubble.app.R
 import com.linkbubble.app.data.AppDatabase
+import com.linkbubble.app.data.Category
 import com.linkbubble.app.data.CategoryWithCount
 import com.linkbubble.app.data.LinkItem
-import com.linkbubble.app.ui.AddCategoryActivity
-import com.linkbubble.app.ui.AddLinkActivity
 import com.linkbubble.app.ui.PanelAdapter
 import com.linkbubble.app.ui.PanelItem
 import kotlinx.coroutines.CoroutineScope
@@ -37,14 +41,22 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
+private sealed class FormMode {
+    object Category : FormMode()
+    data class Link(val categoryId: Long) : FormMode()
+}
+
 class BubbleService : Service() {
 
     private lateinit var windowManager: WindowManager
     private lateinit var bubbleView: View
     private lateinit var panelView: View
+    private lateinit var formView: View
     private lateinit var bubbleParams: WindowManager.LayoutParams
     private lateinit var panelParams: WindowManager.LayoutParams
+    private lateinit var formParams: WindowManager.LayoutParams
     private var panelAdded = false
+    private var formAdded = false
 
     private lateinit var db: AppDatabase
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
@@ -55,6 +67,16 @@ class BubbleService : Service() {
     private val expandedIds = mutableSetOf<Long>()
     private val linksByCategory = mutableMapOf<Long, List<LinkItem>>()
     private val linkJobs = mutableMapOf<Long, Job>()
+
+    private var formMode: FormMode = FormMode.Category
+    private var selectedColor: String = COLOR_PALETTE.first()
+
+    companion object {
+        val COLOR_PALETTE = listOf(
+            "#F44336", "#E91E63", "#9C27B0", "#3F51B5",
+            "#2196F3", "#009688", "#4CAF50", "#FF9800"
+        )
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -68,6 +90,7 @@ class BubbleService : Service() {
             )
             setupBubble()
             setupPanel()
+            setupForm()
             observeCategories()
         } catch (e: Throwable) {
             android.util.Log.e("BubbleService", "Fallo al iniciar la burbuja", e)
@@ -121,27 +144,26 @@ class BubbleService : Service() {
             .build()
 
         if (Build.VERSION.SDK_INT >= 34) {
-            // FOREGROUND_SERVICE_TYPE_SPECIAL_USE solo existe desde Android 14 (API 34).
             startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(1, notification)
         }
     }
 
+    private fun overlayType() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+    else
+        @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+
     // ---------- Burbuja flotante ----------
 
     private fun setupBubble() {
         bubbleView = themedInflater.inflate(R.layout.layout_bubble, null)
 
-        val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
-
         bubbleParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            overlayType,
+            overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -194,15 +216,10 @@ class BubbleService : Service() {
     private fun setupPanel() {
         panelView = themedInflater.inflate(R.layout.layout_bubble_panel, null)
 
-        val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
-
         panelParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            overlayType,
+            overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -216,12 +233,12 @@ class BubbleService : Service() {
 
         adapter = PanelAdapter(
             onToggleExpand = ::toggleExpand,
-            onAddLinkClicked = ::openAddLink,
+            onAddLinkClicked = ::showLinkForm,
             onCategoryMenuClicked = ::showCategoryMenu,
             onLinkChecked = ::onLinkChecked,
             onLinkClicked = ::onLinkClicked,
             onLinkMenuClicked = ::showLinkMenu,
-            onAddCategoryClicked = ::openAddCategory
+            onAddCategoryClicked = ::showCategoryForm
         )
         rv.adapter = adapter
 
@@ -229,6 +246,146 @@ class BubbleService : Service() {
             hidePanel()
         }
     }
+
+    // ---------- Formulario flotante (crear categoría / link, sin salir de la app) ----------
+
+    private fun setupForm() {
+        formView = themedInflater.inflate(R.layout.layout_bubble_form, null)
+
+        formParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            overlayType(),
+            0, // focusable: necesita foco para que el teclado escriba en los EditText
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 380
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        }
+
+        formView.findViewById<View>(R.id.btnFormCancel).setOnClickListener { hideForm() }
+        formView.findViewById<View>(R.id.btnFormSave).setOnClickListener { onFormSave() }
+
+        buildColorSwatches()
+    }
+
+    private fun buildColorSwatches() {
+        val container = formView.findViewById<LinearLayout>(R.id.llColorSwatches)
+        container.removeAllViews()
+        val swatchViews = mutableListOf<View>()
+
+        COLOR_PALETTE.forEach { hex ->
+            val size = (28 * resources.displayMetrics.density).toInt()
+            val margin = (4 * resources.displayMetrics.density).toInt()
+            val swatch = View(themedInflater.context)
+            val params = LinearLayout.LayoutParams(size, size).apply {
+                marginStart = margin
+                marginEnd = margin
+            }
+            swatch.layoutParams = params
+            swatch.tag = hex
+            swatch.background = buildSwatchDrawable(hex, selected = hex == selectedColor)
+            swatch.setOnClickListener {
+                selectedColor = hex
+                swatchViews.forEach { v ->
+                    val vHex = v.tag as String
+                    v.background = buildSwatchDrawable(vHex, selected = vHex == selectedColor)
+                }
+            }
+            swatchViews.add(swatch)
+            container.addView(swatch)
+        }
+    }
+
+    private fun buildSwatchDrawable(hex: String, selected: Boolean): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.parseColor(hex))
+            if (selected) {
+                setStroke((2 * resources.displayMetrics.density).toInt(), Color.BLACK)
+            }
+        }
+    }
+
+    private fun showCategoryForm() {
+        formMode = FormMode.Category
+        selectedColor = COLOR_PALETTE.first()
+        formView.findViewById<TextView>(R.id.tvFormTitle).text = "Nueva categoría"
+        formView.findViewById<View>(R.id.llCategoryForm).visibility = View.VISIBLE
+        formView.findViewById<View>(R.id.llLinkForm).visibility = View.GONE
+        formView.findViewById<EditText>(R.id.etCategoryName).setText("")
+        buildColorSwatches()
+        hidePanel()
+        showForm()
+    }
+
+    private fun showLinkForm(categoryId: Long) {
+        formMode = FormMode.Link(categoryId)
+        formView.findViewById<TextView>(R.id.tvFormTitle).text = "Nuevo link"
+        formView.findViewById<View>(R.id.llCategoryForm).visibility = View.GONE
+        formView.findViewById<View>(R.id.llLinkForm).visibility = View.VISIBLE
+        formView.findViewById<EditText>(R.id.etUrl).setText("")
+        formView.findViewById<EditText>(R.id.etTitle).setText("")
+        hidePanel()
+        showForm()
+    }
+
+    private fun showForm() {
+        if (!formAdded) {
+            try {
+                formParams.x = bubbleParams.x
+                formParams.y = bubbleParams.y + 70
+                windowManager.addView(formView, formParams)
+                formAdded = true
+            } catch (e: Throwable) {
+                android.util.Log.e("BubbleService", "Fallo al mostrar el formulario", e)
+                writeCrashToFile(e)
+                Toast.makeText(this, "Error guardado en crash.txt", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun hideForm() {
+        if (formAdded) {
+            runCatching { windowManager.removeView(formView) }
+            formAdded = false
+        }
+        showPanel()
+    }
+
+    private fun onFormSave() {
+        when (val mode = formMode) {
+            is FormMode.Category -> {
+                val name = formView.findViewById<EditText>(R.id.etCategoryName).text.toString().trim()
+                if (name.isEmpty()) {
+                    Toast.makeText(this, "Escribe un nombre", Toast.LENGTH_SHORT).show()
+                    return
+                }
+                serviceScope.launch {
+                    db.categoryDao().insert(Category(name = name, color = selectedColor))
+                }
+                hideForm()
+            }
+            is FormMode.Link -> {
+                val url = formView.findViewById<EditText>(R.id.etUrl).text.toString().trim()
+                if (url.isEmpty()) {
+                    Toast.makeText(this, "Pega una URL", Toast.LENGTH_SHORT).show()
+                    return
+                }
+                val title = formView.findViewById<EditText>(R.id.etTitle).text.toString().trim()
+                    .ifEmpty { url }
+                serviceScope.launch {
+                    db.linkDao().insert(LinkItem(categoryId = mode.categoryId, url = url, title = title))
+                }
+                Toast.makeText(this, "Link guardado ✅", Toast.LENGTH_SHORT).show()
+                hideForm()
+            }
+        }
+    }
+
+    // ---------- Mostrar / ocultar panel ----------
 
     private fun togglePanel() {
         if (panelAdded) hidePanel() else showPanel()
@@ -306,19 +463,6 @@ class BubbleService : Service() {
 
     // ---------- Acciones ----------
 
-    private fun openAddCategory() {
-        val intent = Intent(this, AddCategoryActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(intent)
-    }
-
-    private fun openAddLink(categoryId: Long) {
-        val intent = Intent(this, AddLinkActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            .putExtra(AddLinkActivity.EXTRA_CATEGORY_ID, categoryId)
-        startActivity(intent)
-    }
-
     private fun showCategoryMenu(categoryId: Long, anchor: View) {
         val popup = PopupMenu(this, anchor)
         popup.menu.add("Eliminar categoría")
@@ -367,6 +511,9 @@ class BubbleService : Service() {
         }
         if (panelAdded) {
             runCatching { windowManager.removeView(panelView) }
+        }
+        if (formAdded) {
+            runCatching { windowManager.removeView(formView) }
         }
     }
 }

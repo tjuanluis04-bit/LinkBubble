@@ -10,11 +10,19 @@
     android:clickable="true"
     android:focusable="true">
 
+    <View
+        android:id="@+id/viewColorDot"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:background="@drawable/color_dot"
+        android:layout_marginEnd="8dp" />
+
     <TextView
         android:id="@+id/tvHeaderChevron"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="▸"
+        android:textColor="#212121"
         android:textSize="14sp"
         android:paddingEnd="6dp" />
 
@@ -25,13 +33,15 @@
         android:layout_weight="1"
         android:textStyle="bold"
         android:textSize="15sp"
-        android:text="Categoría (0)" />
+        android:text="Categoría (0)"
+        android:textColor="#212121" />
 
     <TextView
         android:id="@+id/btnAddLink"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="＋"
+        android:textColor="#212121"
         android:textSize="18sp"
         android:padding="6dp"
         android:clickable="true"
@@ -42,6 +52,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="⋮"
+        android:textColor="#212121"
         android:textSize="18sp"
         android:padding="6dp"
         android:clickable="true"
