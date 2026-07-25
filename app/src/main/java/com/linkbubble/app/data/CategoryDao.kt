@@ -23,6 +23,9 @@ interface CategoryDao {
     @Query("DELETE FROM categories WHERE id = :id")
     suspend fun delete(id: Long)
 
+    @Query("UPDATE categories SET name = :name, color = :color WHERE id = :id")
+    suspend fun updateCategory(id: Long, name: String, color: String)
+
     @Query("SELECT * FROM categories ORDER BY createdAt ASC")
     suspend fun getAllOnce(): List<Category>
 }

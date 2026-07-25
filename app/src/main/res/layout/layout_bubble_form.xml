@@ -49,13 +49,19 @@
                 android:layout_marginTop="16dp"
                 android:layout_marginBottom="10dp" />
 
-            <LinearLayout
-                android:id="@+id/llColorSwatches"
+            <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:paddingBottom="8dp" />
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/llColorSwatches"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingBottom="8dp" />
+            </HorizontalScrollView>
         </LinearLayout>
 
         <!-- Sección link -->

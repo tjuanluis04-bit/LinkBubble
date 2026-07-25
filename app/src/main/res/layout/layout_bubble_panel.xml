@@ -12,7 +12,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingBottom="4dp">
+        android:paddingBottom="8dp">
 
         <TextView
             android:layout_width="0dp"
@@ -35,11 +35,49 @@
             android:focusable="true" />
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvPanel"
+    <!-- Fila horizontal de categorías -->
+    <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:maxHeight="600dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/llCategoryChips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical" />
+    </HorizontalScrollView>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#E0E0E0"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Lista vertical de links de la categoría seleccionada -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvLinks"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="60dp"
+        android:maxHeight="480dp"
         android:scrollbars="vertical" />
+
+    <TextView
+        android:id="@+id/btnAddLinkToSelected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="＋ Agregar link aquí"
+        android:textColor="#6200EE"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:padding="12dp"
+        android:layout_marginTop="4dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="?attr/selectableItemBackground" />
 
 </LinearLayout>

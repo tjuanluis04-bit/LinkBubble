@@ -32,8 +32,8 @@ import com.linkbubble.app.data.AppDatabase
 import com.linkbubble.app.data.Category
 import com.linkbubble.app.data.CategoryWithCount
 import com.linkbubble.app.data.LinkItem
-import com.linkbubble.app.ui.PanelAdapter
-import com.linkbubble.app.ui.PanelItem
+import com.linkbubble.app.ui.LinkListAdapter
+import com.linkbubble.app.ui.LinkListItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -42,7 +42,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 private sealed class FormMode {
-    object Category : FormMode()
+    data class Category(val editingId: Long? = null) : FormMode()
     data class Link(val categoryId: Long) : FormMode()
 }
 
@@ -65,19 +65,24 @@ class BubbleService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private lateinit var themedInflater: LayoutInflater
 
-    private lateinit var adapter: PanelAdapter
-    private var currentCategories: List<CategoryWithCount> = emptyList()
-    private val expandedIds = mutableSetOf<Long>()
-    private val linksByCategory = mutableMapOf<Long, List<LinkItem>>()
-    private val linkJobs = mutableMapOf<Long, Job>()
+    private lateinit var linkAdapter: LinkListAdapter
+    private lateinit var llCategoryChips: LinearLayout
+    private lateinit var btnAddLinkToSelected: TextView
 
-    private var formMode: FormMode = FormMode.Category
+    private var currentCategories: List<CategoryWithCount> = emptyList()
+    private var selectedCategoryId: Long? = null
+    private var linksJob: Job? = null
+    private var currentLinks: List<LinkItem> = emptyList()
+
+    private var formMode: FormMode = FormMode.Category()
     private var selectedColor: String = COLOR_PALETTE.first()
 
     companion object {
         val COLOR_PALETTE = listOf(
-            "#F44336", "#E91E63", "#9C27B0", "#3F51B5",
-            "#2196F3", "#009688", "#4CAF50", "#FF9800"
+            "#F44336", "#E91E63", "#9C27B0", "#673AB7",
+            "#3F51B5", "#2196F3", "#03A9F4", "#00BCD4",
+            "#009688", "#4CAF50", "#8BC34A", "#CDDC39",
+            "#FFEB3B", "#FFC107", "#FF9800", "#795548"
         )
     }
 
@@ -298,6 +303,8 @@ class BubbleService : Service() {
         }
     }
 
+    // ---------- Panel: chips de categoría + lista de links ----------
+
     private fun setupPanel() {
         panelView = themedInflater.inflate(R.layout.layout_bubble_panel, null)
 
@@ -312,26 +319,115 @@ class BubbleService : Service() {
             y = (100 * resources.displayMetrics.density).toInt()
         }
 
-        val rv = panelView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvPanel)
+        llCategoryChips = panelView.findViewById(R.id.llCategoryChips)
+        btnAddLinkToSelected = panelView.findViewById(R.id.btnAddLinkToSelected)
+
+        val rv = panelView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvLinks)
         rv.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
 
-        adapter = PanelAdapter(
-            onToggleExpand = ::toggleExpand,
-            onAddLinkClicked = ::showLinkForm,
-            onCategoryMenuClicked = ::showCategoryMenu,
+        linkAdapter = LinkListAdapter(
             onLinkChecked = ::onLinkChecked,
             onLinkClicked = ::onLinkClicked,
-            onLinkMenuClicked = ::showLinkMenu,
-            onAddCategoryClicked = ::showCategoryForm
+            onLinkMenuClicked = ::showLinkMenu
         )
-        rv.adapter = adapter
+        rv.adapter = linkAdapter
+
+        btnAddLinkToSelected.setOnClickListener {
+            selectedCategoryId?.let { showLinkForm(it) }
+        }
 
         panelView.findViewById<View>(R.id.btnClosePanel).setOnClickListener {
             hidePanel()
         }
     }
 
-    // ---------- Formulario flotante (crear categoría / link, sin salir de la app) ----------
+    private fun rebuildCategoryChips() {
+        llCategoryChips.removeAllViews()
+        val density = resources.displayMetrics.density
+
+        currentCategories.forEach { cat ->
+            val chip = TextView(themedInflater.context)
+            chip.text = "${cat.name} (${cat.linkCount})"
+            chip.textSize = 14f
+            chip.setPadding((14 * density).toInt(), (8 * density).toInt(), (14 * density).toInt(), (8 * density).toInt())
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = (8 * density).toInt() }
+            chip.layoutParams = params
+
+            val isSelected = cat.id == selectedCategoryId
+            val color = runCatching { Color.parseColor(cat.color) }.getOrDefault(Color.parseColor("#6200EE"))
+            chip.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 40f
+                if (isSelected) {
+                    setColor(color)
+                } else {
+                    setColor(Color.WHITE)
+                    setStroke((1.5f * density).toInt(), color)
+                }
+            }
+            chip.setTextColor(if (isSelected) Color.WHITE else color)
+
+            chip.setOnClickListener { selectCategory(cat.id) }
+            chip.setOnLongClickListener { showCategoryMenu(cat); true }
+
+            llCategoryChips.addView(chip)
+        }
+
+        val addChip = TextView(themedInflater.context)
+        addChip.text = "＋"
+        addChip.textSize = 16f
+        addChip.setTextColor(Color.parseColor("#6200EE"))
+        addChip.setPadding((16 * density).toInt(), (8 * density).toInt(), (16 * density).toInt(), (8 * density).toInt())
+        addChip.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 40f
+            setColor(Color.WHITE)
+            setStroke((1.5f * density).toInt(), Color.parseColor("#CCCCCC"))
+        }
+        addChip.setOnClickListener { showCategoryForm() }
+        llCategoryChips.addView(addChip)
+    }
+
+    private fun selectCategory(categoryId: Long) {
+        if (selectedCategoryId == categoryId) return
+        selectedCategoryId = categoryId
+        rebuildCategoryChips()
+        observeLinksForSelected()
+    }
+
+    private fun observeLinksForSelected() {
+        linksJob?.cancel()
+        val catId = selectedCategoryId
+        if (catId == null) {
+            currentLinks = emptyList()
+            rebuildLinkList()
+            return
+        }
+        linksJob = serviceScope.launch {
+            db.linkDao().getByCategory(catId).collect { links ->
+                currentLinks = links
+                rebuildLinkList()
+            }
+        }
+    }
+
+    private fun rebuildLinkList() {
+        btnAddLinkToSelected.visibility = if (selectedCategoryId != null) View.VISIBLE else View.GONE
+        val items = mutableListOf<LinkListItem>()
+        if (selectedCategoryId == null) {
+            items.add(LinkListItem.EmptyState("Creá o elegí una categoría"))
+        } else if (currentLinks.isEmpty()) {
+            items.add(LinkListItem.EmptyState("Sin links todavía"))
+        } else {
+            currentLinks.forEach { items.add(LinkListItem.Row(it)) }
+        }
+        linkAdapter.submitList(items)
+    }
+
+    // ---------- Formulario flotante (crear/editar categoría, crear link — sin salir de la app) ----------
 
     private fun setupForm() {
         formView = themedInflater.inflate(R.layout.layout_bubble_form, null)
@@ -392,13 +488,14 @@ class BubbleService : Service() {
         }
     }
 
-    private fun showCategoryForm() {
-        formMode = FormMode.Category
-        selectedColor = COLOR_PALETTE.first()
-        formView.findViewById<TextView>(R.id.tvFormTitle).text = "Nueva categoría"
+    private fun showCategoryForm(editing: CategoryWithCount? = null) {
+        formMode = FormMode.Category(editingId = editing?.id)
+        selectedColor = editing?.color ?: COLOR_PALETTE.first()
+        formView.findViewById<TextView>(R.id.tvFormTitle).text =
+            if (editing != null) "Editar categoría" else "Nueva categoría"
         formView.findViewById<View>(R.id.llCategoryForm).visibility = View.VISIBLE
         formView.findViewById<View>(R.id.llLinkForm).visibility = View.GONE
-        formView.findViewById<EditText>(R.id.etCategoryName).setText("")
+        formView.findViewById<EditText>(R.id.etCategoryName).setText(editing?.name ?: "")
         buildColorSwatches()
         hidePanel()
         showForm()
@@ -444,8 +541,13 @@ class BubbleService : Service() {
                     Toast.makeText(this, "Escribe un nombre", Toast.LENGTH_SHORT).show()
                     return
                 }
+                val editingId = mode.editingId
                 serviceScope.launch {
-                    db.categoryDao().insert(Category(name = name, color = selectedColor))
+                    if (editingId != null) {
+                        db.categoryDao().updateCategory(editingId, name, selectedColor)
+                    } else {
+                        db.categoryDao().insert(Category(name = name, color = selectedColor))
+                    }
                 }
                 hideForm()
             }
@@ -497,61 +599,46 @@ class BubbleService : Service() {
     private fun observeCategories() {
         serviceScope.launch {
             db.categoryDao().getCategoriesWithCount().collect { categories ->
+                val hadNoCategories = currentCategories.isEmpty()
                 currentCategories = categories
-                rebuildList()
-            }
-        }
-    }
 
-    private fun toggleExpand(categoryId: Long) {
-        if (expandedIds.contains(categoryId)) {
-            expandedIds.remove(categoryId)
-            linkJobs[categoryId]?.cancel()
-            linkJobs.remove(categoryId)
-            linksByCategory.remove(categoryId)
-        } else {
-            expandedIds.add(categoryId)
-            val job = serviceScope.launch {
-                db.linkDao().getByCategory(categoryId).collect { links ->
-                    linksByCategory[categoryId] = links
-                    rebuildList()
+                // Si la categoría seleccionada ya no existe, o es la primera carga, seleccionar la primera.
+                val stillExists = categories.any { it.id == selectedCategoryId }
+                if (!stillExists) {
+                    val newSelection = categories.firstOrNull()?.id
+                    if (newSelection != selectedCategoryId) {
+                        selectedCategoryId = newSelection
+                        observeLinksForSelected()
+                    }
                 }
-            }
-            linkJobs[categoryId] = job
-        }
-        rebuildList()
-    }
 
-    private fun rebuildList() {
-        val items = mutableListOf<PanelItem>()
-        for (cat in currentCategories) {
-            val expanded = expandedIds.contains(cat.id)
-            items.add(PanelItem.Header(cat, expanded))
-            if (expanded) {
-                val links = linksByCategory[cat.id]
-                if (links.isNullOrEmpty()) {
-                    items.add(PanelItem.Empty(cat.id))
-                } else {
-                    links.forEach { items.add(PanelItem.LinkRow(it)) }
+                rebuildCategoryChips()
+                if (hadNoCategories && categories.isNotEmpty()) {
+                    rebuildLinkList()
                 }
             }
         }
-        items.add(PanelItem.Footer)
-        adapter.submitList(items)
     }
 
     // ---------- Acciones ----------
 
-    private fun showCategoryMenu(categoryId: Long, anchor: View) {
+    private fun showCategoryMenu(category: CategoryWithCount) {
+        // Se muestra anclado al chip mismo a través de un menú simple.
+        val anchor = llCategoryChips
         val popup = PopupMenu(this, anchor)
+        popup.menu.add("Editar")
         popup.menu.add("Eliminar categoría")
-        popup.setOnMenuItemClickListener {
-            serviceScope.launch {
-                db.categoryDao().delete(categoryId)
-                expandedIds.remove(categoryId)
-                linkJobs[categoryId]?.cancel()
-                linkJobs.remove(categoryId)
-                linksByCategory.remove(categoryId)
+        popup.setOnMenuItemClickListener { item ->
+            when (item.title) {
+                "Editar" -> showCategoryForm(category)
+                "Eliminar categoría" -> {
+                    serviceScope.launch {
+                        db.categoryDao().delete(category.id)
+                        if (selectedCategoryId == category.id) {
+                            selectedCategoryId = null
+                        }
+                    }
+                }
             }
             true
         }
