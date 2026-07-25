@@ -159,6 +159,8 @@ class BubbleService : Service() {
     else
         @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
 
+    private fun overlayWidthPx(): Int = (resources.displayMetrics.widthPixels * 0.94).toInt()
+
     // ---------- Burbuja flotante ----------
 
     private fun setupBubble() {
@@ -300,15 +302,14 @@ class BubbleService : Service() {
         panelView = themedInflater.inflate(R.layout.layout_bubble_panel, null)
 
         panelParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            overlayWidthPx(),
             WindowManager.LayoutParams.WRAP_CONTENT,
             overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 380
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            y = (100 * resources.displayMetrics.density).toInt()
         }
 
         val rv = panelView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvPanel)
@@ -336,7 +337,7 @@ class BubbleService : Service() {
         formView = themedInflater.inflate(R.layout.layout_bubble_form, null)
 
         formParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            overlayWidthPx(),
             WindowManager.LayoutParams.WRAP_CONTENT,
             overlayType(),
             0, // focusable: necesita foco para que el teclado escriba en los EditText
@@ -359,8 +360,8 @@ class BubbleService : Service() {
         val swatchViews = mutableListOf<View>()
 
         COLOR_PALETTE.forEach { hex ->
-            val size = (28 * resources.displayMetrics.density).toInt()
-            val margin = (4 * resources.displayMetrics.density).toInt()
+            val size = (36 * resources.displayMetrics.density).toInt()
+            val margin = (6 * resources.displayMetrics.density).toInt()
             val swatch = View(themedInflater.context)
             val params = LinearLayout.LayoutParams(size, size).apply {
                 marginStart = margin
@@ -474,8 +475,6 @@ class BubbleService : Service() {
     private fun showPanel() {
         if (!panelAdded) {
             try {
-                panelParams.x = bubbleParams.x
-                panelParams.y = bubbleParams.y + 70
                 windowManager.addView(panelView, panelParams)
                 panelAdded = true
             } catch (e: Throwable) {

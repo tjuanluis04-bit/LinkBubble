@@ -26,6 +26,11 @@ class AddLinkActivity : AppCompatActivity() {
         binding = ActivityAddLinkBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.94).toInt(),
+            android.view.WindowManager.LayoutParams.WRAP_CONTENT
+        )
+
         // Si viene de "Compartir" desde otra app, precarga el texto/URL compartido.
         if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
             val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
