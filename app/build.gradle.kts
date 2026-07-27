@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -16,8 +17,24 @@ android {
         versionName = "1.0"
     }
 
+    // Keystore FIJO para que el SHA-1 nunca cambie entre builds de CI.
+    // Necesario para que el login de Google funcione siempre (el SHA-1 debe
+    // coincidir con el que registraste en la consola de Firebase).
+    signingConfigs {
+        create("fixedDebug") {
+            storeFile = file("linkbubble-debug.jks")
+            storePassword = "linkbubble123"
+            keyAlias = "linkbubble"
+            keyPassword = "linkbubble123"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("fixedDebug")
+        }
         release {
+            signingConfig = signingConfigs.getByName("fixedDebug")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -53,4 +70,10 @@ dependencies {
     ksp("androidx.room:room-compiler:$roomVersion")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // Firebase (login con Google + sincronización en la nube)
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 }

@@ -32,18 +32,20 @@ import com.linkbubble.app.data.AppDatabase
 import com.linkbubble.app.data.Category
 import com.linkbubble.app.data.CategoryWithCount
 import com.linkbubble.app.data.LinkItem
-import com.linkbubble.app.ui.LinkListAdapter
-import com.linkbubble.app.ui.LinkListItem
+import com.linkbubble.app.ui.SubPanelItem
+import com.linkbubble.app.ui.SubcategoryAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 private sealed class FormMode {
-    data class Category(val editingId: Long? = null) : FormMode()
-    data class Link(val categoryId: Long) : FormMode()
+    // parentId: si es null y editingId es null, se crea una categoría horizontal nueva.
+    // si parentId tiene valor y editingId es null, se crea una subcategoría bajo ese padre.
+    // si editingId tiene valor, se está editando esa categoría/subcategoría existente (nombre/color).
+    data class CategoryForm(val editingId: Long? = null, val parentId: Long? = null) : FormMode()
+    data class Link(val subcategoryId: Long) : FormMode()
 }
 
 class BubbleService : Service() {
@@ -65,16 +67,21 @@ class BubbleService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private lateinit var themedInflater: LayoutInflater
 
-    private lateinit var linkAdapter: LinkListAdapter
+    private lateinit var subAdapter: SubcategoryAdapter
     private lateinit var llCategoryChips: LinearLayout
-    private lateinit var btnAddLinkToSelected: TextView
 
-    private var currentCategories: List<CategoryWithCount> = emptyList()
-    private var selectedCategoryId: Long? = null
-    private var linksJob: Job? = null
-    private var currentLinks: List<LinkItem> = emptyList()
+    // Nivel 1: categorías horizontales
+    private var topLevelCategories: List<CategoryWithCount> = emptyList()
+    private var selectedTopLevelId: Long? = null
 
-    private var formMode: FormMode = FormMode.Category()
+    // Nivel 2: subcategorías verticales de la horizontal seleccionada
+    private var childCategories: List<CategoryWithCount> = emptyList()
+    private var childrenJob: Job? = null
+    private val expandedSubIds = mutableSetOf<Long>()
+    private val linksBySub = mutableMapOf<Long, List<LinkItem>>()
+    private val linkJobs = mutableMapOf<Long, Job>()
+
+    private var formMode: FormMode = FormMode.CategoryForm()
     private var selectedColor: String = COLOR_PALETTE.first()
 
     companion object {
@@ -100,7 +107,7 @@ class BubbleService : Service() {
             setupPanel()
             setupForm()
             setupCloseTarget()
-            observeCategories()
+            observeTopLevelCategories()
         } catch (e: Throwable) {
             android.util.Log.e("BubbleService", "Fallo al iniciar la burbuja", e)
             writeCrashToFile(e)
@@ -206,7 +213,7 @@ class BubbleService : Service() {
                 MotionEvent.ACTION_MOVE -> {
                     val dx = (event.rawX - initialTouchX).toInt()
                     val dy = (event.rawY - initialTouchY).toInt()
-                    if (abs(dx) > 12 || abs(dy) > 12) {
+                    if (kotlin.math.abs(dx) > 12 || kotlin.math.abs(dy) > 12) {
                         if (!isDragging) {
                             isDragging = true
                             hidePanel()
@@ -303,7 +310,7 @@ class BubbleService : Service() {
         }
     }
 
-    // ---------- Panel: chips de categoría + lista de links ----------
+    // ---------- Panel: nivel 1 (chips horizontales) + nivel 2 (acordeón vertical) ----------
 
     private fun setupPanel() {
         panelView = themedInflater.inflate(R.layout.layout_bubble_panel, null)
@@ -320,24 +327,47 @@ class BubbleService : Service() {
         }
 
         llCategoryChips = panelView.findViewById(R.id.llCategoryChips)
-        btnAddLinkToSelected = panelView.findViewById(R.id.btnAddLinkToSelected)
 
-        val rv = panelView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvLinks)
+        val rv = panelView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvSubcategories)
         rv.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
 
-        linkAdapter = LinkListAdapter(
+        subAdapter = SubcategoryAdapter(
+            onToggleExpand = ::toggleExpandSub,
+            onAddLinkClicked = ::showLinkForm,
+            onSubcategoryMenuClicked = ::showSubcategoryMenu,
             onLinkChecked = ::onLinkChecked,
             onLinkClicked = ::onLinkClicked,
-            onLinkMenuClicked = ::showLinkMenu
+            onLinkMenuClicked = ::showLinkMenu,
+            onAddSubcategoryClicked = {
+                val parent = selectedTopLevelId
+                if (parent == null) {
+                    Toast.makeText(this, "Primero elegí o creá una categoría", Toast.LENGTH_SHORT).show()
+                } else {
+                    showCategoryForm(parentId = parent)
+                }
+            }
         )
-        rv.adapter = linkAdapter
-
-        btnAddLinkToSelected.setOnClickListener {
-            selectedCategoryId?.let { showLinkForm(it) }
-        }
+        rv.adapter = subAdapter
 
         panelView.findViewById<View>(R.id.btnClosePanel).setOnClickListener {
             hidePanel()
+        }
+    }
+
+    // ---------- Nivel 1: categorías horizontales ----------
+
+    private fun observeTopLevelCategories() {
+        serviceScope.launch {
+            db.categoryDao().getTopLevelCategories().collect { categories ->
+                topLevelCategories = categories
+
+                val stillExists = categories.any { it.id == selectedTopLevelId }
+                if (!stillExists) {
+                    selectTopLevel(categories.firstOrNull()?.id, forceReload = true)
+                }
+
+                rebuildCategoryChips()
+            }
         }
     }
 
@@ -345,9 +375,9 @@ class BubbleService : Service() {
         llCategoryChips.removeAllViews()
         val density = resources.displayMetrics.density
 
-        currentCategories.forEach { cat ->
+        topLevelCategories.forEach { cat ->
             val chip = TextView(themedInflater.context)
-            chip.text = "${cat.name} (${cat.linkCount})"
+            chip.text = cat.name
             chip.textSize = 14f
             chip.setPadding((14 * density).toInt(), (8 * density).toInt(), (14 * density).toInt(), (8 * density).toInt())
             val params = LinearLayout.LayoutParams(
@@ -356,7 +386,7 @@ class BubbleService : Service() {
             ).apply { marginEnd = (8 * density).toInt() }
             chip.layoutParams = params
 
-            val isSelected = cat.id == selectedCategoryId
+            val isSelected = cat.id == selectedTopLevelId
             val color = runCatching { Color.parseColor(cat.color) }.getOrDefault(Color.parseColor("#6200EE"))
             chip.background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -370,8 +400,8 @@ class BubbleService : Service() {
             }
             chip.setTextColor(if (isSelected) Color.WHITE else color)
 
-            chip.setOnClickListener { selectCategory(cat.id) }
-            chip.setOnLongClickListener { showCategoryMenu(cat); true }
+            chip.setOnClickListener { selectTopLevel(cat.id) }
+            chip.setOnLongClickListener { showTopLevelMenu(cat); true }
 
             llCategoryChips.addView(chip)
         }
@@ -387,47 +417,79 @@ class BubbleService : Service() {
             setColor(Color.WHITE)
             setStroke((1.5f * density).toInt(), Color.parseColor("#CCCCCC"))
         }
-        addChip.setOnClickListener { showCategoryForm() }
+        addChip.setOnClickListener { showCategoryForm(parentId = null) }
         llCategoryChips.addView(addChip)
     }
 
-    private fun selectCategory(categoryId: Long) {
-        if (selectedCategoryId == categoryId) return
-        selectedCategoryId = categoryId
-        rebuildCategoryChips()
-        observeLinksForSelected()
+    private fun selectTopLevel(id: Long?, forceReload: Boolean = false) {
+        if (selectedTopLevelId == id && !forceReload) return
+        selectedTopLevelId = id
+
+        // Se cierra el acordeón y se cancelan los observadores de links de la horizontal anterior.
+        expandedSubIds.clear()
+        linkJobs.values.forEach { it.cancel() }
+        linkJobs.clear()
+        linksBySub.clear()
+        childrenJob?.cancel()
+        childCategories = emptyList()
+
+        if (id != null) {
+            childrenJob = serviceScope.launch {
+                db.categoryDao().getChildCategories(id).collect { children ->
+                    childCategories = children
+                    rebuildSubList()
+                }
+            }
+        } else {
+            rebuildSubList()
+        }
     }
 
-    private fun observeLinksForSelected() {
-        linksJob?.cancel()
-        val catId = selectedCategoryId
-        if (catId == null) {
-            currentLinks = emptyList()
-            rebuildLinkList()
+    // ---------- Nivel 2: subcategorías verticales + links ----------
+
+    private fun toggleExpandSub(subcategoryId: Long) {
+        if (expandedSubIds.contains(subcategoryId)) {
+            expandedSubIds.remove(subcategoryId)
+            linkJobs[subcategoryId]?.cancel()
+            linkJobs.remove(subcategoryId)
+            linksBySub.remove(subcategoryId)
+        } else {
+            expandedSubIds.add(subcategoryId)
+            val job = serviceScope.launch {
+                db.linkDao().getByCategory(subcategoryId).collect { links ->
+                    linksBySub[subcategoryId] = links
+                    rebuildSubList()
+                }
+            }
+            linkJobs[subcategoryId] = job
+        }
+        rebuildSubList()
+    }
+
+    private fun rebuildSubList() {
+        val items = mutableListOf<SubPanelItem>()
+        if (selectedTopLevelId == null) {
+            // Sin categoría horizontal seleccionada: no se muestra nada en el acordeón.
+            subAdapter.submitList(items)
             return
         }
-        linksJob = serviceScope.launch {
-            db.linkDao().getByCategory(catId).collect { links ->
-                currentLinks = links
-                rebuildLinkList()
+        for (sub in childCategories) {
+            val expanded = expandedSubIds.contains(sub.id)
+            items.add(SubPanelItem.Header(sub, expanded))
+            if (expanded) {
+                val links = linksBySub[sub.id]
+                if (links.isNullOrEmpty()) {
+                    items.add(SubPanelItem.Empty(sub.id))
+                } else {
+                    links.forEach { items.add(SubPanelItem.LinkRow(it)) }
+                }
             }
         }
+        items.add(SubPanelItem.Footer)
+        subAdapter.submitList(items)
     }
 
-    private fun rebuildLinkList() {
-        btnAddLinkToSelected.visibility = if (selectedCategoryId != null) View.VISIBLE else View.GONE
-        val items = mutableListOf<LinkListItem>()
-        if (selectedCategoryId == null) {
-            items.add(LinkListItem.EmptyState("Creá o elegí una categoría"))
-        } else if (currentLinks.isEmpty()) {
-            items.add(LinkListItem.EmptyState("Sin links todavía"))
-        } else {
-            currentLinks.forEach { items.add(LinkListItem.Row(it)) }
-        }
-        linkAdapter.submitList(items)
-    }
-
-    // ---------- Formulario flotante (crear/editar categoría, crear link — sin salir de la app) ----------
+    // ---------- Formulario flotante (crear/editar categoría u subcategoría, crear link) ----------
 
     private fun setupForm() {
         formView = themedInflater.inflate(R.layout.layout_bubble_form, null)
@@ -488,11 +550,16 @@ class BubbleService : Service() {
         }
     }
 
-    private fun showCategoryForm(editing: CategoryWithCount? = null) {
-        formMode = FormMode.Category(editingId = editing?.id)
+    private fun showCategoryForm(editing: CategoryWithCount? = null, parentId: Long? = null) {
+        formMode = FormMode.CategoryForm(editingId = editing?.id, parentId = parentId)
         selectedColor = editing?.color ?: COLOR_PALETTE.first()
-        formView.findViewById<TextView>(R.id.tvFormTitle).text =
-            if (editing != null) "Editar categoría" else "Nueva categoría"
+        val isSubcategory = parentId != null || (editing != null && selectedTopLevelId != null && childCategories.any { it.id == editing.id })
+        formView.findViewById<TextView>(R.id.tvFormTitle).text = when {
+            editing != null && isSubcategory -> "Editar subcategoría"
+            editing != null -> "Editar categoría"
+            parentId != null -> "Nueva subcategoría"
+            else -> "Nueva categoría"
+        }
         formView.findViewById<View>(R.id.llCategoryForm).visibility = View.VISIBLE
         formView.findViewById<View>(R.id.llLinkForm).visibility = View.GONE
         formView.findViewById<EditText>(R.id.etCategoryName).setText(editing?.name ?: "")
@@ -501,8 +568,8 @@ class BubbleService : Service() {
         showForm()
     }
 
-    private fun showLinkForm(categoryId: Long) {
-        formMode = FormMode.Link(categoryId)
+    private fun showLinkForm(subcategoryId: Long) {
+        formMode = FormMode.Link(subcategoryId)
         formView.findViewById<TextView>(R.id.tvFormTitle).text = "Nuevo link"
         formView.findViewById<View>(R.id.llCategoryForm).visibility = View.GONE
         formView.findViewById<View>(R.id.llLinkForm).visibility = View.VISIBLE
@@ -535,7 +602,7 @@ class BubbleService : Service() {
 
     private fun onFormSave() {
         when (val mode = formMode) {
-            is FormMode.Category -> {
+            is FormMode.CategoryForm -> {
                 val name = formView.findViewById<EditText>(R.id.etCategoryName).text.toString().trim()
                 if (name.isEmpty()) {
                     Toast.makeText(this, "Escribe un nombre", Toast.LENGTH_SHORT).show()
@@ -546,7 +613,13 @@ class BubbleService : Service() {
                     if (editingId != null) {
                         db.categoryDao().updateCategory(editingId, name, selectedColor)
                     } else {
-                        db.categoryDao().insert(Category(name = name, color = selectedColor))
+                        val newId = db.categoryDao().insert(
+                            Category(name = name, color = selectedColor, parentId = mode.parentId)
+                        )
+                        // Si se creó una categoría horizontal nueva, la seleccionamos automáticamente.
+                        if (mode.parentId == null) {
+                            selectTopLevel(newId, forceReload = true)
+                        }
                     }
                 }
                 hideForm()
@@ -560,7 +633,7 @@ class BubbleService : Service() {
                 val title = formView.findViewById<EditText>(R.id.etTitle).text.toString().trim()
                     .ifEmpty { url }
                 serviceScope.launch {
-                    db.linkDao().insert(LinkItem(categoryId = mode.categoryId, url = url, title = title))
+                    db.linkDao().insert(LinkItem(categoryId = mode.subcategoryId, url = url, title = title))
                 }
                 Toast.makeText(this, "Link guardado ✅", Toast.LENGTH_SHORT).show()
                 hideForm()
@@ -594,49 +667,43 @@ class BubbleService : Service() {
         }
     }
 
-    // ---------- Datos ----------
-
-    private fun observeCategories() {
-        serviceScope.launch {
-            db.categoryDao().getCategoriesWithCount().collect { categories ->
-                val hadNoCategories = currentCategories.isEmpty()
-                currentCategories = categories
-
-                // Si la categoría seleccionada ya no existe, o es la primera carga, seleccionar la primera.
-                val stillExists = categories.any { it.id == selectedCategoryId }
-                if (!stillExists) {
-                    val newSelection = categories.firstOrNull()?.id
-                    if (newSelection != selectedCategoryId) {
-                        selectedCategoryId = newSelection
-                        observeLinksForSelected()
-                    }
-                }
-
-                rebuildCategoryChips()
-                if (hadNoCategories && categories.isNotEmpty()) {
-                    rebuildLinkList()
-                }
-            }
-        }
-    }
-
     // ---------- Acciones ----------
 
-    private fun showCategoryMenu(category: CategoryWithCount) {
-        // Se muestra anclado al chip mismo a través de un menú simple.
-        val anchor = llCategoryChips
-        val popup = PopupMenu(this, anchor)
+    private fun showTopLevelMenu(category: CategoryWithCount) {
+        val popup = PopupMenu(this, llCategoryChips)
         popup.menu.add("Editar")
         popup.menu.add("Eliminar categoría")
         popup.setOnMenuItemClickListener { item ->
             when (item.title) {
-                "Editar" -> showCategoryForm(category)
+                "Editar" -> showCategoryForm(editing = category, parentId = null)
                 "Eliminar categoría" -> {
                     serviceScope.launch {
                         db.categoryDao().delete(category.id)
-                        if (selectedCategoryId == category.id) {
-                            selectedCategoryId = null
+                        if (selectedTopLevelId == category.id) {
+                            selectedTopLevelId = null
                         }
+                    }
+                }
+            }
+            true
+        }
+        popup.show()
+    }
+
+    private fun showSubcategoryMenu(subcategory: CategoryWithCount, anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add("Editar")
+        popup.menu.add("Eliminar subcategoría")
+        popup.setOnMenuItemClickListener { item ->
+            when (item.title) {
+                "Editar" -> showCategoryForm(editing = subcategory, parentId = selectedTopLevelId)
+                "Eliminar subcategoría" -> {
+                    serviceScope.launch {
+                        db.categoryDao().delete(subcategory.id)
+                        expandedSubIds.remove(subcategory.id)
+                        linkJobs[subcategory.id]?.cancel()
+                        linkJobs.remove(subcategory.id)
+                        linksBySub.remove(subcategory.id)
                     }
                 }
             }

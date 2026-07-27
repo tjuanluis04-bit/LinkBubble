@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1063843629354",
+    "project_id": "glosa-34df0",
+    "storage_bucket": "glosa-34df0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1063843629354:android:ef118d8913997e23cb3653",
+        "android_client_info": {
+          "package_name": "com.linkbubble.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1063843629354-drupuj44cpm4r1lforpn8sbp4iv0otj4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTZgquPJceKnGL4xuSAAWBWreTUcML2zQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1063843629354-drupuj44cpm4r1lforpn8sbp4iv0otj4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -10,24 +10,24 @@ import com.linkbubble.app.R
 import com.linkbubble.app.data.CategoryWithCount
 import com.linkbubble.app.data.LinkItem
 
-sealed class PanelItem {
-    data class Header(val category: CategoryWithCount, val expanded: Boolean) : PanelItem()
-    data class LinkRow(val link: LinkItem) : PanelItem()
-    data class Empty(val categoryId: Long) : PanelItem()
-    object Footer : PanelItem()
+sealed class SubPanelItem {
+    data class Header(val subcategory: CategoryWithCount, val expanded: Boolean) : SubPanelItem()
+    data class LinkRow(val link: LinkItem) : SubPanelItem()
+    data class Empty(val subcategoryId: Long) : SubPanelItem()
+    object Footer : SubPanelItem()
 }
 
-class PanelAdapter(
-    private val onToggleExpand: (categoryId: Long) -> Unit,
-    private val onAddLinkClicked: (categoryId: Long) -> Unit,
-    private val onCategoryMenuClicked: (categoryId: Long, anchor: View) -> Unit,
+class SubcategoryAdapter(
+    private val onToggleExpand: (subcategoryId: Long) -> Unit,
+    private val onAddLinkClicked: (subcategoryId: Long) -> Unit,
+    private val onSubcategoryMenuClicked: (subcategory: CategoryWithCount, anchor: View) -> Unit,
     private val onLinkChecked: (link: LinkItem, checked: Boolean) -> Unit,
     private val onLinkClicked: (link: LinkItem) -> Unit,
     private val onLinkMenuClicked: (link: LinkItem, anchor: View) -> Unit,
-    private val onAddCategoryClicked: () -> Unit
+    private val onAddSubcategoryClicked: () -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-    private var items: List<PanelItem> = emptyList()
+    private var items: List<SubPanelItem> = emptyList()
 
     companion object {
         private const val TYPE_HEADER = 0
@@ -36,7 +36,7 @@ class PanelAdapter(
         private const val TYPE_FOOTER = 3
     }
 
-    fun submitList(newItems: List<PanelItem>) {
+    fun submitList(newItems: List<SubPanelItem>) {
         items = newItems
         notifyDataSetChanged()
     }
@@ -44,10 +44,10 @@ class PanelAdapter(
     override fun getItemCount(): Int = items.size
 
     override fun getItemViewType(position: Int): Int = when (items[position]) {
-        is PanelItem.Header -> TYPE_HEADER
-        is PanelItem.LinkRow -> TYPE_LINK
-        is PanelItem.Empty -> TYPE_EMPTY
-        PanelItem.Footer -> TYPE_FOOTER
+        is SubPanelItem.Header -> TYPE_HEADER
+        is SubPanelItem.LinkRow -> TYPE_LINK
+        is SubPanelItem.Empty -> TYPE_EMPTY
+        SubPanelItem.Footer -> TYPE_FOOTER
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -62,10 +62,10 @@ class PanelAdapter(
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (val item = items[position]) {
-            is PanelItem.Header -> (holder as HeaderVH).bind(item)
-            is PanelItem.LinkRow -> (holder as LinkVH).bind(item.link)
-            is PanelItem.Empty -> Unit
-            PanelItem.Footer -> (holder as FooterVH).bind()
+            is SubPanelItem.Header -> (holder as HeaderVH).bind(item)
+            is SubPanelItem.LinkRow -> (holder as LinkVH).bind(item.link)
+            is SubPanelItem.Empty -> Unit
+            SubPanelItem.Footer -> (holder as FooterVH).bind()
         }
     }
 
@@ -76,18 +76,18 @@ class PanelAdapter(
         private val btnAdd: TextView = itemView.findViewById(R.id.btnAddLink)
         private val btnMenu: TextView = itemView.findViewById(R.id.btnHeaderMenu)
 
-        fun bind(header: PanelItem.Header) {
-            val cat = header.category
-            tvName.text = "${cat.name} (${cat.linkCount})"
+        fun bind(header: SubPanelItem.Header) {
+            val sub = header.subcategory
+            tvName.text = "${sub.name} (${sub.linkCount})"
             tvChevron.text = if (header.expanded) "▾" else "▸"
             try {
-                viewColorDot.background.setTint(android.graphics.Color.parseColor(cat.color))
+                viewColorDot.background.setTint(android.graphics.Color.parseColor(sub.color))
             } catch (_: Exception) {
                 viewColorDot.background.setTint(android.graphics.Color.parseColor("#6200EE"))
             }
-            itemView.setOnClickListener { onToggleExpand(cat.id) }
-            btnAdd.setOnClickListener { onAddLinkClicked(cat.id) }
-            btnMenu.setOnClickListener { onCategoryMenuClicked(cat.id, it) }
+            itemView.setOnClickListener { onToggleExpand(sub.id) }
+            btnAdd.setOnClickListener { onAddLinkClicked(sub.id) }
+            btnMenu.setOnClickListener { onSubcategoryMenuClicked(sub, it) }
         }
     }
 
@@ -113,7 +113,7 @@ class PanelAdapter(
 
     inner class FooterVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
         fun bind() {
-            itemView.setOnClickListener { onAddCategoryClicked() }
+            itemView.setOnClickListener { onAddSubcategoryClicked() }
         }
     }
 }

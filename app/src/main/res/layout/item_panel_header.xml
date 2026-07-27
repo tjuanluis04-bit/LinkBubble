@@ -22,8 +22,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="▸"
-        android:textColor="#212121"
         android:textSize="14sp"
+        android:textColor="#212121"
         android:paddingEnd="6dp" />
 
     <TextView
@@ -33,16 +33,16 @@
         android:layout_weight="1"
         android:textStyle="bold"
         android:textSize="15sp"
-        android:text="Categoría (0)"
-        android:textColor="#212121" />
+        android:textColor="#212121"
+        android:text="Subcategoría (0)" />
 
     <TextView
         android:id="@+id/btnAddLink"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="＋"
-        android:textColor="#212121"
         android:textSize="18sp"
+        android:textColor="#212121"
         android:padding="6dp"
         android:clickable="true"
         android:focusable="true" />
@@ -52,8 +52,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="⋮"
-        android:textColor="#212121"
         android:textSize="18sp"
+        android:textColor="#212121"
         android:padding="6dp"
         android:clickable="true"
         android:focusable="true" />

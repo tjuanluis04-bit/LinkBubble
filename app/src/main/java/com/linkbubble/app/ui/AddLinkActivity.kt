@@ -7,7 +7,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.linkbubble.app.data.AppDatabase
-import com.linkbubble.app.data.Category
+import com.linkbubble.app.data.LeafCategory
 import com.linkbubble.app.data.LinkItem
 import com.linkbubble.app.databinding.ActivityAddLinkBinding
 import kotlinx.coroutines.launch
@@ -19,7 +19,7 @@ class AddLinkActivity : AppCompatActivity() {
     }
 
     private lateinit var binding: ActivityAddLinkBinding
-    private var categories: List<Category> = emptyList()
+    private var categories: List<LeafCategory> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,17 +43,17 @@ class AddLinkActivity : AppCompatActivity() {
         val dao = AppDatabase.getInstance(this).categoryDao()
 
         lifecycleScope.launch {
-            categories = dao.getAllOnce()
+            categories = dao.getAllLeafCategoriesOnce()
             if (categories.isEmpty()) {
                 Toast.makeText(
                     this@AddLinkActivity,
-                    "Crea primero una categoría desde la burbuja",
+                    "Creá primero una categoría y una subcategoría desde la burbuja",
                     Toast.LENGTH_LONG
                 ).show()
                 finish()
                 return@launch
             }
-            val names = categories.map { it.name }
+            val names = categories.map { "${it.parentName} / ${it.name}" }
             binding.spinnerCategory.adapter = ArrayAdapter(
                 this@AddLinkActivity,
                 android.R.layout.simple_spinner_dropdown_item,
