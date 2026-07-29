@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -16,6 +17,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.linkbubble.app.databinding.ActivityMainBinding
 import com.linkbubble.app.service.BubbleService
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -37,6 +39,13 @@ class MainActivity : AppCompatActivity() {
             auth.signInWithCredential(credential).addOnCompleteListener { authResult ->
                 if (authResult.isSuccessful) {
                     Toast.makeText(this, "Sesión iniciada ✅", Toast.LENGTH_SHORT).show()
+                    val repo = com.linkbubble.app.data.SyncRepository(
+                        com.linkbubble.app.data.AppDatabase.getInstance(this)
+                    )
+                    lifecycleScope.launch {
+                        runCatching { repo.fullMerge() }
+                        Toast.makeText(this@MainActivity, "Datos sincronizados con la nube", Toast.LENGTH_SHORT).show()
+                    }
                 } else {
                     Toast.makeText(this, "No se pudo iniciar sesión", Toast.LENGTH_LONG).show()
                 }

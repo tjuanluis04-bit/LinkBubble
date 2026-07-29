@@ -13,13 +13,13 @@ import com.linkbubble.app.data.LinkItem
 sealed class SubPanelItem {
     data class Header(val subcategory: CategoryWithCount, val expanded: Boolean) : SubPanelItem()
     data class LinkRow(val link: LinkItem) : SubPanelItem()
-    data class Empty(val subcategoryId: Long) : SubPanelItem()
+    data class Empty(val subcategoryId: String) : SubPanelItem()
     object Footer : SubPanelItem()
 }
 
 class SubcategoryAdapter(
-    private val onToggleExpand: (subcategoryId: Long) -> Unit,
-    private val onAddLinkClicked: (subcategoryId: Long) -> Unit,
+    private val onToggleExpand: (subcategoryId: String) -> Unit,
+    private val onAddLinkClicked: (subcategoryId: String) -> Unit,
     private val onSubcategoryMenuClicked: (subcategory: CategoryWithCount, anchor: View) -> Unit,
     private val onLinkChecked: (link: LinkItem, checked: Boolean) -> Unit,
     private val onLinkClicked: (link: LinkItem) -> Unit,

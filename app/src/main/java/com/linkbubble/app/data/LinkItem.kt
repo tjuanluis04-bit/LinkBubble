@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.util.UUID
 
 @Entity(
     tableName = "links",
@@ -16,8 +17,8 @@ import androidx.room.PrimaryKey
     indices = [Index("categoryId")]
 )
 data class LinkItem(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val categoryId: Long,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val categoryId: String,
     val url: String,
     val title: String,
     val checked: Boolean = false,

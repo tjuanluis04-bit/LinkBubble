@@ -2,6 +2,7 @@ package com.linkbubble.app.data
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
@@ -33,16 +34,22 @@ interface CategoryDao {
         ORDER BY c.createdAt ASC
         """
     )
-    fun getChildCategories(parentId: Long): Flow<List<CategoryWithCount>>
+    fun getChildCategories(parentId: String): Flow<List<CategoryWithCount>>
 
-    @Insert
-    suspend fun insert(category: Category): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(category: Category)
 
     @Query("DELETE FROM categories WHERE id = :id")
-    suspend fun delete(id: Long)
+    suspend fun delete(id: String)
 
     @Query("UPDATE categories SET name = :name, color = :color WHERE id = :id")
-    suspend fun updateCategory(id: Long, name: String, color: String)
+    suspend fun updateCategory(id: String, name: String, color: String)
+
+    @Query("SELECT * FROM categories WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): Category?
+
+    @Query("SELECT * FROM categories")
+    suspend fun getAllOnce(): List<Category>
 
     // Todas las subcategorías (las que pueden contener links), con el nombre de su horizontal — para el flujo de "Compartir".
     @Query(
@@ -57,7 +64,7 @@ interface CategoryDao {
 }
 
 data class LeafCategory(
-    val id: Long,
+    val id: String,
     val name: String,
     val parentName: String
 )

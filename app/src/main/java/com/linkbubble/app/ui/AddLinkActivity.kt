@@ -39,7 +39,7 @@ class AddLinkActivity : AppCompatActivity() {
             }
         }
 
-        val preselectedCategoryId = intent.getLongExtra(EXTRA_CATEGORY_ID, -1L)
+        val preselectedCategoryId = intent.getStringExtra(EXTRA_CATEGORY_ID)
         val dao = AppDatabase.getInstance(this).categoryDao()
 
         lifecycleScope.launch {
@@ -59,7 +59,7 @@ class AddLinkActivity : AppCompatActivity() {
                 android.R.layout.simple_spinner_dropdown_item,
                 names
             )
-            if (preselectedCategoryId != -1L) {
+            if (preselectedCategoryId != null) {
                 val index = categories.indexOfFirst { it.id == preselectedCategoryId }
                 if (index >= 0) binding.spinnerCategory.setSelection(index)
             }

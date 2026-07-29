@@ -44,8 +44,8 @@ private sealed class FormMode {
     // parentId: si es null y editingId es null, se crea una categoría horizontal nueva.
     // si parentId tiene valor y editingId es null, se crea una subcategoría bajo ese padre.
     // si editingId tiene valor, se está editando esa categoría/subcategoría existente (nombre/color).
-    data class CategoryForm(val editingId: Long? = null, val parentId: Long? = null) : FormMode()
-    data class Link(val subcategoryId: Long) : FormMode()
+    data class CategoryForm(val editingId: String? = null, val parentId: String? = null) : FormMode()
+    data class Link(val subcategoryId: String) : FormMode()
 }
 
 class BubbleService : Service() {
@@ -64,6 +64,7 @@ class BubbleService : Service() {
     private var closeTargetAdded = false
 
     private lateinit var db: AppDatabase
+    private lateinit var syncRepo: com.linkbubble.app.data.SyncRepository
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private lateinit var themedInflater: LayoutInflater
 
@@ -72,14 +73,14 @@ class BubbleService : Service() {
 
     // Nivel 1: categorías horizontales
     private var topLevelCategories: List<CategoryWithCount> = emptyList()
-    private var selectedTopLevelId: Long? = null
+    private var selectedTopLevelId: String? = null
 
     // Nivel 2: subcategorías verticales de la horizontal seleccionada
     private var childCategories: List<CategoryWithCount> = emptyList()
     private var childrenJob: Job? = null
-    private val expandedSubIds = mutableSetOf<Long>()
-    private val linksBySub = mutableMapOf<Long, List<LinkItem>>()
-    private val linkJobs = mutableMapOf<Long, Job>()
+    private val expandedSubIds = mutableSetOf<String>()
+    private val linksBySub = mutableMapOf<String, List<LinkItem>>()
+    private val linkJobs = mutableMapOf<String, Job>()
 
     private var formMode: FormMode = FormMode.CategoryForm()
     private var selectedColor: String = COLOR_PALETTE.first()
@@ -97,6 +98,7 @@ class BubbleService : Service() {
         super.onCreate()
         try {
             db = AppDatabase.getInstance(this)
+            syncRepo = com.linkbubble.app.data.SyncRepository(db)
             startForegroundNotification()
 
             windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -108,6 +110,12 @@ class BubbleService : Service() {
             setupForm()
             setupCloseTarget()
             observeTopLevelCategories()
+
+            if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) {
+                serviceScope.launch {
+                    runCatching { syncRepo.fullMerge() }
+                }
+            }
         } catch (e: Throwable) {
             android.util.Log.e("BubbleService", "Fallo al iniciar la burbuja", e)
             writeCrashToFile(e)
@@ -421,7 +429,7 @@ class BubbleService : Service() {
         llCategoryChips.addView(addChip)
     }
 
-    private fun selectTopLevel(id: Long?, forceReload: Boolean = false) {
+    private fun selectTopLevel(id: String?, forceReload: Boolean = false) {
         if (selectedTopLevelId == id && !forceReload) return
         selectedTopLevelId = id
 
@@ -447,7 +455,7 @@ class BubbleService : Service() {
 
     // ---------- Nivel 2: subcategorías verticales + links ----------
 
-    private fun toggleExpandSub(subcategoryId: Long) {
+    private fun toggleExpandSub(subcategoryId: String) {
         if (expandedSubIds.contains(subcategoryId)) {
             expandedSubIds.remove(subcategoryId)
             linkJobs[subcategoryId]?.cancel()
@@ -550,7 +558,7 @@ class BubbleService : Service() {
         }
     }
 
-    private fun showCategoryForm(editing: CategoryWithCount? = null, parentId: Long? = null) {
+    private fun showCategoryForm(editing: CategoryWithCount? = null, parentId: String? = null) {
         formMode = FormMode.CategoryForm(editingId = editing?.id, parentId = parentId)
         selectedColor = editing?.color ?: COLOR_PALETTE.first()
         val isSubcategory = parentId != null || (editing != null && selectedTopLevelId != null && childCategories.any { it.id == editing.id })
@@ -568,7 +576,7 @@ class BubbleService : Service() {
         showForm()
     }
 
-    private fun showLinkForm(subcategoryId: Long) {
+    private fun showLinkForm(subcategoryId: String) {
         formMode = FormMode.Link(subcategoryId)
         formView.findViewById<TextView>(R.id.tvFormTitle).text = "Nuevo link"
         formView.findViewById<View>(R.id.llCategoryForm).visibility = View.GONE
@@ -612,13 +620,14 @@ class BubbleService : Service() {
                 serviceScope.launch {
                     if (editingId != null) {
                         db.categoryDao().updateCategory(editingId, name, selectedColor)
+                        db.categoryDao().getById(editingId)?.let { syncRepo.pushCategory(it) }
                     } else {
-                        val newId = db.categoryDao().insert(
-                            Category(name = name, color = selectedColor, parentId = mode.parentId)
-                        )
+                        val newCategory = Category(name = name, color = selectedColor, parentId = mode.parentId)
+                        db.categoryDao().insert(newCategory)
+                        syncRepo.pushCategory(newCategory)
                         // Si se creó una categoría horizontal nueva, la seleccionamos automáticamente.
                         if (mode.parentId == null) {
-                            selectTopLevel(newId, forceReload = true)
+                            selectTopLevel(newCategory.id, forceReload = true)
                         }
                     }
                 }
@@ -633,7 +642,9 @@ class BubbleService : Service() {
                 val title = formView.findViewById<EditText>(R.id.etTitle).text.toString().trim()
                     .ifEmpty { url }
                 serviceScope.launch {
-                    db.linkDao().insert(LinkItem(categoryId = mode.subcategoryId, url = url, title = title))
+                    val newLink = LinkItem(categoryId = mode.subcategoryId, url = url, title = title)
+                    db.linkDao().insert(newLink)
+                    syncRepo.pushLink(newLink)
                 }
                 Toast.makeText(this, "Link guardado ✅", Toast.LENGTH_SHORT).show()
                 hideForm()
@@ -679,6 +690,7 @@ class BubbleService : Service() {
                 "Eliminar categoría" -> {
                     serviceScope.launch {
                         db.categoryDao().delete(category.id)
+                        syncRepo.deleteCategoryRemote(category.id)
                         if (selectedTopLevelId == category.id) {
                             selectedTopLevelId = null
                         }
@@ -700,6 +712,7 @@ class BubbleService : Service() {
                 "Eliminar subcategoría" -> {
                     serviceScope.launch {
                         db.categoryDao().delete(subcategory.id)
+                        syncRepo.deleteCategoryRemote(subcategory.id)
                         expandedSubIds.remove(subcategory.id)
                         linkJobs[subcategory.id]?.cancel()
                         linkJobs.remove(subcategory.id)
@@ -714,7 +727,9 @@ class BubbleService : Service() {
 
     private fun onLinkChecked(link: LinkItem, checked: Boolean) {
         serviceScope.launch {
-            db.linkDao().update(link.copy(checked = checked))
+            val updated = link.copy(checked = checked)
+            db.linkDao().update(updated)
+            syncRepo.pushLink(updated)
         }
     }
 
@@ -728,7 +743,10 @@ class BubbleService : Service() {
         val popup = PopupMenu(this, anchor)
         popup.menu.add("Eliminar")
         popup.setOnMenuItemClickListener {
-            serviceScope.launch { db.linkDao().delete(link.id) }
+            serviceScope.launch {
+                db.linkDao().delete(link.id)
+                syncRepo.deleteLinkRemote(link.id)
+            }
             true
         }
         popup.show()

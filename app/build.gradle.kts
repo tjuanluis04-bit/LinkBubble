@@ -70,6 +70,7 @@ dependencies {
     ksp("androidx.room:room-compiler:$roomVersion")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     // Firebase (login con Google + sincronización en la nube)
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))

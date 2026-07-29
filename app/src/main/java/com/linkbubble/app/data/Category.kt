@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.util.UUID
 
 @Entity(
     tableName = "categories",
@@ -16,10 +17,10 @@ import androidx.room.PrimaryKey
     indices = [Index("parentId")]
 )
 data class Category(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val name: String,
     val color: String = "#6200EE",
     // null = categoría horizontal (nivel superior). Con valor = subcategoría vertical, anidada dentro de esa horizontal.
-    val parentId: Long? = null,
+    val parentId: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
