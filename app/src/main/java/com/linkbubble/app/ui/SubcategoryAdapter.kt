@@ -27,7 +27,7 @@ class SubcategoryAdapter(
     private val onAddSubcategoryClicked: () -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-    private var items: List<SubPanelItem> = emptyList()
+    private val items = mutableListOf<SubPanelItem>()
 
     companion object {
         private const val TYPE_HEADER = 0
@@ -37,9 +37,21 @@ class SubcategoryAdapter(
     }
 
     fun submitList(newItems: List<SubPanelItem>) {
-        items = newItems
+        items.clear()
+        items.addAll(newItems)
         notifyDataSetChanged()
     }
+
+    fun getItemAt(position: Int): SubPanelItem? = items.getOrNull(position)
+
+    fun moveItem(from: Int, to: Int) {
+        if (from < 0 || to < 0 || from >= items.size || to >= items.size) return
+        val item = items.removeAt(from)
+        items.add(to, item)
+        notifyItemMoved(from, to)
+    }
+
+    fun snapshotItems(): List<SubPanelItem> = items.toList()
 
     override fun getItemCount(): Int = items.size
 

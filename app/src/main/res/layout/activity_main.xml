@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="match_parent">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="24dp"
-    android:gravity="center_vertical">
+    android:padding="24dp">
 
     <TextView
         android:layout_width="wrap_content"
@@ -67,6 +70,61 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="12sp"
-        android:text="Alternativa con Shizuku/aShell (sin tocar Ajustes). Ojo: dentro de aShell ya estás en una shell del propio celular, así que NO se le pone el prefijo 'adb shell', solo:\nappops set com.linkbubble.app SYSTEM_ALERT_WINDOW allow" />
+        android:text="Alternativa con Shizuku/aShell (sin tocar Ajustes). Ojo: dentro de aShell ya estás en una shell del propio celular, así que NO se le pone el prefijo 'adb shell', solo:\nappops set com.linkbubble.app SYSTEM_ALERT_WINDOW allow"
+        android:layout_marginBottom="24dp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#DDDDDD"
+        android:layout_marginBottom="20dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Aparecer solo en redes sociales"
+        android:textStyle="bold"
+        android:textSize="16sp"
+        android:layout_marginBottom="6dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Con esto activado, la burbuja queda oculta y solo aparece sola al abrir Facebook, Instagram o X. Para volver a ocultarla del todo hay que arrastrarla hasta la X roja."
+        android:textSize="12sp"
+        android:layout_marginBottom="12dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Activar detección automática" />
+
+        <Switch
+            android:id="@+id/switchAutoHide"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvAccessibilityStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textStyle="bold"
+        android:layout_marginBottom="10dp" />
+
+    <Button
+        android:id="@+id/btnAccessibilitySettings"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Activar servicio de accesibilidad" />
 
 </LinearLayout>
+</ScrollView>

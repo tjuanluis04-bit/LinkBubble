@@ -22,5 +22,6 @@ data class LinkItem(
     val url: String,
     val title: String,
     val checked: Boolean = false,
+    val orderIndex: Int = 0,
     val createdAt: Long = System.currentTimeMillis()
 )

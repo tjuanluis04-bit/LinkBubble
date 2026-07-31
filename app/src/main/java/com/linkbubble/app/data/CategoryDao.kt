@@ -18,7 +18,7 @@ interface CategoryDao {
         LEFT JOIN links l ON l.categoryId = child.id
         WHERE c.parentId IS NULL
         GROUP BY c.id
-        ORDER BY c.createdAt ASC
+        ORDER BY c.orderIndex ASC
         """
     )
     fun getTopLevelCategories(): Flow<List<CategoryWithCount>>
@@ -31,7 +31,7 @@ interface CategoryDao {
         LEFT JOIN links l ON l.categoryId = c.id
         WHERE c.parentId = :parentId
         GROUP BY c.id
-        ORDER BY c.createdAt ASC
+        ORDER BY c.orderIndex ASC
         """
     )
     fun getChildCategories(parentId: String): Flow<List<CategoryWithCount>>
@@ -45,6 +45,15 @@ interface CategoryDao {
     @Query("UPDATE categories SET name = :name, color = :color WHERE id = :id")
     suspend fun updateCategory(id: String, name: String, color: String)
 
+    @Query("UPDATE categories SET orderIndex = :order WHERE id = :id")
+    suspend fun updateOrder(id: String, order: Int)
+
+    @Query("SELECT COALESCE(MAX(orderIndex), -1) FROM categories WHERE parentId IS NULL")
+    suspend fun getMaxTopLevelOrder(): Int
+
+    @Query("SELECT COALESCE(MAX(orderIndex), -1) FROM categories WHERE parentId = :parentId")
+    suspend fun getMaxChildOrder(parentId: String): Int
+
     @Query("SELECT * FROM categories WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): Category?
 
@@ -57,7 +66,7 @@ interface CategoryDao {
         SELECT child.id as id, child.name as name, parent.name as parentName
         FROM categories child
         JOIN categories parent ON parent.id = child.parentId
-        ORDER BY parent.createdAt ASC, child.createdAt ASC
+        ORDER BY parent.orderIndex ASC, child.orderIndex ASC
         """
     )
     suspend fun getAllLeafCategoriesOnce(): List<LeafCategory>

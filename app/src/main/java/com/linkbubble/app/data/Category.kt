@@ -22,5 +22,6 @@ data class Category(
     val color: String = "#6200EE",
     // null = categoría horizontal (nivel superior). Con valor = subcategoría vertical, anidada dentro de esa horizontal.
     val parentId: String? = null,
+    val orderIndex: Int = 0,
     val createdAt: Long = System.currentTimeMillis()
 )

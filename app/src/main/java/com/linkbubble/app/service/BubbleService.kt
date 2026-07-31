@@ -60,6 +60,8 @@ class BubbleService : Service() {
     private lateinit var formParams: WindowManager.LayoutParams
     private lateinit var closeTargetParams: WindowManager.LayoutParams
     private var panelAdded = false
+    private var bubbleAdded = false
+    private var autoHideMode = false
     private var formAdded = false
     private var closeTargetAdded = false
 
@@ -69,7 +71,7 @@ class BubbleService : Service() {
     private lateinit var themedInflater: LayoutInflater
 
     private lateinit var subAdapter: SubcategoryAdapter
-    private lateinit var llCategoryChips: LinearLayout
+    private lateinit var topAdapter: com.linkbubble.app.ui.TopLevelChipAdapter
 
     // Nivel 1: categorías horizontales
     private var topLevelCategories: List<CategoryWithCount> = emptyList()
@@ -92,11 +94,23 @@ class BubbleService : Service() {
             "#009688", "#4CAF50", "#8BC34A", "#CDDC39",
             "#FFEB3B", "#FFC107", "#FF9800", "#795548"
         )
+
+        const val ACTION_SHOW_BUBBLE = "com.linkbubble.app.action.SHOW_BUBBLE"
+        const val ACTION_HIDE_BUBBLE = "com.linkbubble.app.action.HIDE_BUBBLE"
+        const val ACTION_SET_AUTO_HIDE = "com.linkbubble.app.action.SET_AUTO_HIDE"
+        const val EXTRA_ENABLED = "enabled"
+        const val PREFS_NAME = "linkbubble_prefs"
+        const val PREF_AUTO_HIDE = "auto_hide_enabled"
+
+        @Volatile
+        var isRunning: Boolean = false
     }
 
     override fun onCreate() {
         super.onCreate()
         try {
+            isRunning = true
+            autoHideMode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(PREF_AUTO_HIDE, false)
             db = AppDatabase.getInstance(this)
             syncRepo = com.linkbubble.app.data.SyncRepository(db)
             startForegroundNotification()
@@ -141,6 +155,38 @@ class BubbleService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_SHOW_BUBBLE -> showBubbleView()
+            ACTION_HIDE_BUBBLE -> hideBubbleView()
+            ACTION_SET_AUTO_HIDE -> {
+                autoHideMode = intent.getBooleanExtra(EXTRA_ENABLED, false)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                    .putBoolean(PREF_AUTO_HIDE, autoHideMode).apply()
+                if (autoHideMode) hideBubbleView() else showBubbleView()
+            }
+        }
+        return START_STICKY
+    }
+
+    private fun showBubbleView() {
+        if (!::bubbleView.isInitialized) return
+        if (!bubbleAdded) {
+            runCatching {
+                windowManager.addView(bubbleView, bubbleParams)
+                bubbleAdded = true
+            }
+        }
+    }
+
+    private fun hideBubbleView() {
+        if (bubbleAdded) {
+            runCatching { windowManager.removeView(bubbleView) }
+            bubbleAdded = false
+            hidePanel()
+        }
+    }
 
     // ---------- Notificación en primer plano ----------
 
@@ -198,7 +244,10 @@ class BubbleService : Service() {
             y = 300
         }
 
-        windowManager.addView(bubbleView, bubbleParams)
+        if (!autoHideMode) {
+            windowManager.addView(bubbleView, bubbleParams)
+            bubbleAdded = true
+        }
 
         var initialX = 0
         var initialY = 0
@@ -334,10 +383,20 @@ class BubbleService : Service() {
             y = (100 * resources.displayMetrics.density).toInt()
         }
 
-        llCategoryChips = panelView.findViewById(R.id.llCategoryChips)
+        val rvTop = panelView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvTopLevel)
+        rvTop.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
+            this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false
+        )
+        topAdapter = com.linkbubble.app.ui.TopLevelChipAdapter(
+            onClick = { selectTopLevel(it.id) },
+            onLongClick = { showTopLevelMenu(it) },
+            onAddClick = { showCategoryForm(parentId = null) }
+        )
+        rvTop.adapter = topAdapter
+        androidx.recyclerview.widget.ItemTouchHelper(TopChipDragCallback()).attachToRecyclerView(rvTop)
 
-        val rv = panelView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvSubcategories)
-        rv.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+        val rvSub = panelView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvSubcategories)
+        rvSub.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
 
         subAdapter = SubcategoryAdapter(
             onToggleExpand = ::toggleExpandSub,
@@ -355,10 +414,129 @@ class BubbleService : Service() {
                 }
             }
         )
-        rv.adapter = subAdapter
+        rvSub.adapter = subAdapter
+        androidx.recyclerview.widget.ItemTouchHelper(SubDragCallback()).attachToRecyclerView(rvSub)
 
         panelView.findViewById<View>(R.id.btnClosePanel).setOnClickListener {
             hidePanel()
+        }
+    }
+
+    // ---------- Arrastrar para reordenar: categorías horizontales ----------
+
+    private inner class TopChipDragCallback : androidx.recyclerview.widget.ItemTouchHelper.Callback() {
+        override fun isLongPressDragEnabled() = true
+        override fun isItemViewSwipeEnabled() = false
+
+        override fun getMovementFlags(
+            recyclerView: androidx.recyclerview.widget.RecyclerView,
+            viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder
+        ): Int {
+            val item = topAdapter.getItemAt(viewHolder.bindingAdapterPosition)
+            val flags = if (item is com.linkbubble.app.ui.TopChipItem.Chip) {
+                androidx.recyclerview.widget.ItemTouchHelper.LEFT or androidx.recyclerview.widget.ItemTouchHelper.RIGHT
+            } else 0
+            return makeMovementFlags(0, flags)
+        }
+
+        override fun onMove(
+            recyclerView: androidx.recyclerview.widget.RecyclerView,
+            viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder,
+            target: androidx.recyclerview.widget.RecyclerView.ViewHolder
+        ): Boolean {
+            val from = viewHolder.bindingAdapterPosition
+            val to = target.bindingAdapterPosition
+            val toItem = topAdapter.getItemAt(to)
+            // No se puede soltar sobre el botón "+".
+            if (toItem !is com.linkbubble.app.ui.TopChipItem.Chip) return false
+            topAdapter.moveItem(from, to)
+            return true
+        }
+
+        override fun onSwiped(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder, direction: Int) {}
+
+        override fun clearView(
+            recyclerView: androidx.recyclerview.widget.RecyclerView,
+            viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder
+        ) {
+            super.clearView(recyclerView, viewHolder)
+            val orderedIds = topAdapter.snapshotCategoryOrder()
+            serviceScope.launch {
+                orderedIds.forEachIndexed { index, id ->
+                    db.categoryDao().updateOrder(id, index)
+                    db.categoryDao().getById(id)?.let { syncRepo.pushCategory(it) }
+                }
+            }
+        }
+    }
+
+    // ---------- Arrastrar para reordenar: subcategorías y links (mismo padre) ----------
+
+    private inner class SubDragCallback : androidx.recyclerview.widget.ItemTouchHelper.Callback() {
+        override fun isLongPressDragEnabled() = true
+        override fun isItemViewSwipeEnabled() = false
+
+        override fun getMovementFlags(
+            recyclerView: androidx.recyclerview.widget.RecyclerView,
+            viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder
+        ): Int {
+            val item = subAdapter.getItemAt(viewHolder.bindingAdapterPosition)
+            val dragFlags = if (item is SubPanelItem.Header || item is SubPanelItem.LinkRow) {
+                androidx.recyclerview.widget.ItemTouchHelper.UP or androidx.recyclerview.widget.ItemTouchHelper.DOWN
+            } else 0
+            return makeMovementFlags(dragFlags, 0)
+        }
+
+        override fun onMove(
+            recyclerView: androidx.recyclerview.widget.RecyclerView,
+            viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder,
+            target: androidx.recyclerview.widget.RecyclerView.ViewHolder
+        ): Boolean {
+            val from = viewHolder.bindingAdapterPosition
+            val to = target.bindingAdapterPosition
+            val fromItem = subAdapter.getItemAt(from) ?: return false
+            val toItem = subAdapter.getItemAt(to) ?: return false
+            val compatible = when {
+                fromItem is SubPanelItem.Header && toItem is SubPanelItem.Header -> true
+                fromItem is SubPanelItem.LinkRow && toItem is SubPanelItem.LinkRow ->
+                    fromItem.link.categoryId == toItem.link.categoryId
+                else -> false
+            }
+            if (!compatible) return false
+            subAdapter.moveItem(from, to)
+            return true
+        }
+
+        override fun onSwiped(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder, direction: Int) {}
+
+        override fun clearView(
+            recyclerView: androidx.recyclerview.widget.RecyclerView,
+            viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder
+        ) {
+            super.clearView(recyclerView, viewHolder)
+            val snapshot = subAdapter.snapshotItems()
+            serviceScope.launch {
+                var headerIndex = 0
+                val linkIndexByCategory = mutableMapOf<String, Int>()
+                snapshot.forEach { item ->
+                    when (item) {
+                        is SubPanelItem.Header -> {
+                            val id = item.subcategory.id
+                            db.categoryDao().updateOrder(id, headerIndex)
+                            db.categoryDao().getById(id)?.let { syncRepo.pushCategory(it) }
+                            headerIndex++
+                        }
+                        is SubPanelItem.LinkRow -> {
+                            val catId = item.link.categoryId
+                            val idx = linkIndexByCategory.getOrDefault(catId, 0)
+                            db.linkDao().updateOrder(item.link.id, idx)
+                            syncRepo.pushLink(item.link.copy(orderIndex = idx))
+                            linkIndexByCategory[catId] = idx + 1
+                        }
+                        else -> Unit
+                    }
+                }
+            }
         }
     }
 
@@ -374,64 +552,15 @@ class BubbleService : Service() {
                     selectTopLevel(categories.firstOrNull()?.id, forceReload = true)
                 }
 
-                rebuildCategoryChips()
+                topAdapter.submitList(categories, selectedTopLevelId)
             }
         }
-    }
-
-    private fun rebuildCategoryChips() {
-        llCategoryChips.removeAllViews()
-        val density = resources.displayMetrics.density
-
-        topLevelCategories.forEach { cat ->
-            val chip = TextView(themedInflater.context)
-            chip.text = cat.name
-            chip.textSize = 14f
-            chip.setPadding((14 * density).toInt(), (8 * density).toInt(), (14 * density).toInt(), (8 * density).toInt())
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { marginEnd = (8 * density).toInt() }
-            chip.layoutParams = params
-
-            val isSelected = cat.id == selectedTopLevelId
-            val color = runCatching { Color.parseColor(cat.color) }.getOrDefault(Color.parseColor("#6200EE"))
-            chip.background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = 40f
-                if (isSelected) {
-                    setColor(color)
-                } else {
-                    setColor(Color.WHITE)
-                    setStroke((1.5f * density).toInt(), color)
-                }
-            }
-            chip.setTextColor(if (isSelected) Color.WHITE else color)
-
-            chip.setOnClickListener { selectTopLevel(cat.id) }
-            chip.setOnLongClickListener { showTopLevelMenu(cat); true }
-
-            llCategoryChips.addView(chip)
-        }
-
-        val addChip = TextView(themedInflater.context)
-        addChip.text = "＋"
-        addChip.textSize = 16f
-        addChip.setTextColor(Color.parseColor("#6200EE"))
-        addChip.setPadding((16 * density).toInt(), (8 * density).toInt(), (16 * density).toInt(), (8 * density).toInt())
-        addChip.background = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = 40f
-            setColor(Color.WHITE)
-            setStroke((1.5f * density).toInt(), Color.parseColor("#CCCCCC"))
-        }
-        addChip.setOnClickListener { showCategoryForm(parentId = null) }
-        llCategoryChips.addView(addChip)
     }
 
     private fun selectTopLevel(id: String?, forceReload: Boolean = false) {
         if (selectedTopLevelId == id && !forceReload) return
         selectedTopLevelId = id
+        topAdapter.submitList(topLevelCategories, selectedTopLevelId)
 
         // Se cierra el acordeón y se cancelan los observadores de links de la horizontal anterior.
         expandedSubIds.clear()
@@ -622,7 +751,15 @@ class BubbleService : Service() {
                         db.categoryDao().updateCategory(editingId, name, selectedColor)
                         db.categoryDao().getById(editingId)?.let { syncRepo.pushCategory(it) }
                     } else {
-                        val newCategory = Category(name = name, color = selectedColor, parentId = mode.parentId)
+                        val maxOrder = if (mode.parentId == null) {
+                            db.categoryDao().getMaxTopLevelOrder()
+                        } else {
+                            db.categoryDao().getMaxChildOrder(mode.parentId)
+                        }
+                        val newCategory = Category(
+                            name = name, color = selectedColor, parentId = mode.parentId,
+                            orderIndex = maxOrder + 1
+                        )
                         db.categoryDao().insert(newCategory)
                         syncRepo.pushCategory(newCategory)
                         // Si se creó una categoría horizontal nueva, la seleccionamos automáticamente.
@@ -642,7 +779,11 @@ class BubbleService : Service() {
                 val title = formView.findViewById<EditText>(R.id.etTitle).text.toString().trim()
                     .ifEmpty { url }
                 serviceScope.launch {
-                    val newLink = LinkItem(categoryId = mode.subcategoryId, url = url, title = title)
+                    val maxOrder = db.linkDao().getMaxOrder(mode.subcategoryId)
+                    val newLink = LinkItem(
+                        categoryId = mode.subcategoryId, url = url, title = title,
+                        orderIndex = maxOrder + 1
+                    )
                     db.linkDao().insert(newLink)
                     syncRepo.pushLink(newLink)
                 }
@@ -681,7 +822,7 @@ class BubbleService : Service() {
     // ---------- Acciones ----------
 
     private fun showTopLevelMenu(category: CategoryWithCount) {
-        val popup = PopupMenu(this, llCategoryChips)
+        val popup = PopupMenu(this, panelView)
         popup.menu.add("Editar")
         popup.menu.add("Eliminar categoría")
         popup.setOnMenuItemClickListener { item ->
@@ -756,8 +897,9 @@ class BubbleService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
         serviceScope.cancel()
-        if (::bubbleView.isInitialized) {
+        if (bubbleAdded) {
             runCatching { windowManager.removeView(bubbleView) }
         }
         if (panelAdded) {

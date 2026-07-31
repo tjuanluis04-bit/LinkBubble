@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">LinkBubble</string>
+    <string name="accessibility_service_description">Detecta cuándo abrís Facebook, Instagram o X para mostrar automáticamente el ícono flotante de LinkBubble. No lee el contenido de la pantalla, solo qué app está abierta.</string>
 </resources>

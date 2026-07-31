@@ -114,12 +114,46 @@ class MainActivity : AppCompatActivity() {
             stopService(Intent(this, BubbleService::class.java))
             Toast.makeText(this, "Burbuja detenida", Toast.LENGTH_SHORT).show()
         }
+
+        binding.btnAccessibilitySettings.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+
+        val prefs = getSharedPreferences(BubbleService.PREFS_NAME, MODE_PRIVATE)
+        binding.switchAutoHide.isChecked = prefs.getBoolean(BubbleService.PREF_AUTO_HIDE, false)
+        binding.switchAutoHide.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(BubbleService.PREF_AUTO_HIDE, isChecked).apply()
+            if (BubbleService.isRunning) {
+                startService(
+                    Intent(this, BubbleService::class.java)
+                        .setAction(BubbleService.ACTION_SET_AUTO_HIDE)
+                        .putExtra(BubbleService.EXTRA_ENABLED, isChecked)
+                )
+            }
+        }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val expected = "$packageName/com.linkbubble.app.service.SocialAppDetectorService"
+        val enabled = Settings.Secure.getString(
+            contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        return enabled.split(":").any { it.equals(expected, ignoreCase = true) }
+    }
+
+    private fun updateAccessibilityStatus() {
+        binding.tvAccessibilityStatus.text = if (isAccessibilityServiceEnabled()) {
+            "Servicio de accesibilidad: activado ✅"
+        } else {
+            "Servicio de accesibilidad: NO activado ❌"
+        }
     }
 
     override fun onResume() {
         super.onResume()
         updateStatus()
         updateAccountStatus()
+        updateAccessibilityStatus()
     }
 
     private fun updateStatus() {
