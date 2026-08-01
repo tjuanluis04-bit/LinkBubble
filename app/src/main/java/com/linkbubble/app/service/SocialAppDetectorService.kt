@@ -14,6 +14,7 @@ class SocialAppDetectorService : AccessibilityService() {
     companion object {
         val TARGET_PACKAGES = setOf(
             "com.facebook.katana",
+            "com.facebook.lite",
             "com.instagram.android",
             "com.twitter.android"
         )
