@@ -85,16 +85,9 @@ class BubbleService : Service() {
     private val linkJobs = mutableMapOf<String, Job>()
 
     private var formMode: FormMode = FormMode.CategoryForm()
-    private var selectedColor: String = COLOR_PALETTE.first()
+    private var selectedColor: String = com.linkbubble.app.ui.ColorPalette.COLORS.first()
 
     companion object {
-        val COLOR_PALETTE = listOf(
-            "#F44336", "#E91E63", "#9C27B0", "#673AB7",
-            "#3F51B5", "#2196F3", "#03A9F4", "#00BCD4",
-            "#009688", "#4CAF50", "#8BC34A", "#CDDC39",
-            "#FFEB3B", "#FFC107", "#FF9800", "#795548"
-        )
-
         const val ACTION_SHOW_BUBBLE = "com.linkbubble.app.action.SHOW_BUBBLE"
         const val ACTION_HIDE_BUBBLE = "com.linkbubble.app.action.HIDE_BUBBLE"
         const val ACTION_SET_AUTO_HIDE = "com.linkbubble.app.action.SET_AUTO_HIDE"
@@ -654,7 +647,7 @@ class BubbleService : Service() {
         container.removeAllViews()
         val swatchViews = mutableListOf<View>()
 
-        COLOR_PALETTE.forEach { hex ->
+        com.linkbubble.app.ui.ColorPalette.COLORS.forEach { hex ->
             val size = (36 * resources.displayMetrics.density).toInt()
             val margin = (6 * resources.displayMetrics.density).toInt()
             val swatch = View(themedInflater.context)
@@ -689,7 +682,7 @@ class BubbleService : Service() {
 
     private fun showCategoryForm(editing: CategoryWithCount? = null, parentId: String? = null) {
         formMode = FormMode.CategoryForm(editingId = editing?.id, parentId = parentId)
-        selectedColor = editing?.color ?: COLOR_PALETTE.first()
+        selectedColor = editing?.color ?: com.linkbubble.app.ui.ColorPalette.COLORS.first()
         val isSubcategory = parentId != null || (editing != null && selectedTopLevelId != null && childCategories.any { it.id == editing.id })
         formView.findViewById<TextView>(R.id.tvFormTitle).text = when {
             editing != null && isSubcategory -> "Editar subcategoría"

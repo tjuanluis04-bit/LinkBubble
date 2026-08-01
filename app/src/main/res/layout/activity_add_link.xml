@@ -21,6 +21,72 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="8dp" />
 
+    <TextView
+        android:id="@+id/btnToggleNewCategory"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="＋ Nueva categoría"
+        android:textColor="#6200EE"
+        android:textStyle="bold"
+        android:padding="8dp"
+        android:layout_marginTop="4dp"
+        android:clickable="true"
+        android:focusable="true" />
+
+    <LinearLayout
+        android:id="@+id/llNewCategorySection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:paddingTop="8dp">
+
+        <EditText
+            android:id="@+id/etNewTopLevelName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Categoría (ej: Humor)"
+            android:textColor="#212121"
+            android:textColorHint="#888888"
+            android:maxLines="1" />
+
+        <EditText
+            android:id="@+id/etNewSubName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Subcategoría (ej: Memes)"
+            android:textColor="#212121"
+            android:textColorHint="#888888"
+            android:maxLines="1"
+            android:layout_marginTop="8dp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:layout_marginTop="10dp">
+
+            <LinearLayout
+                android:id="@+id/llNewCategoryColors"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical" />
+        </HorizontalScrollView>
+
+        <TextView
+            android:id="@+id/btnCreateCategory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Crear y usar"
+            android:textColor="#6200EE"
+            android:textStyle="bold"
+            android:padding="10dp"
+            android:layout_marginTop="6dp"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
     <EditText
         android:id="@+id/etUrl"
         android:layout_width="match_parent"
